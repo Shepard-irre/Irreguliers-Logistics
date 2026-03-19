@@ -28,7 +28,7 @@ st.sidebar.info(f"Accès : {', '.join(USER_GROUPS)}")
 st.title("🛸 Les Irréguliers - Hub Logistique")
 tabs = st.tabs(["🏗️ Raffineries", "💰 Commerce Stanton", "💹 Bourse & Entrées", "📦 Stock Fédération", "🤝 Commerce Fédération"])
 
-# --- TAB 2 : COMMERCE STANTON ---
+# --- TAB 2 : COMMERCE STANTON (Lecture Directe SCU) ---
 with tabs[1]:
     st.header("💰 Marché Public de Stanton")
     comms = uex.get_commodities()
@@ -43,7 +43,11 @@ with tabs[1]:
             buyers = [p for p in prices if p.get('price_sell', 0) > 0]
             if buyers:
                 df = pd.DataFrame(buyers).sort_values(by="price_sell", ascending=False)
-                st.metric(f"Valeur Marché Max", f"{df.iloc[0]['price_sell'] * 100 * vol_st:,} aUEC")
+                # Correction Algorithme : Lecture directe SCU
+                scu_price_max = df.iloc[0]['price_sell']
+                total_val = scu_price_max * vol_st
+                
+                st.metric(f"Valeur Marché Max ({vol_st} SCU)", f"{total_val:,} aUEC")
                 st.table(df[['terminal_name', 'price_sell', 'star_system_name']].rename(columns={'terminal_name':'Terminal', 'price_sell':'Prix Unit'}))
 
 # --- TAB 3 : BOURSE & ENTRÉES ---
@@ -91,7 +95,7 @@ with tabs[4]:
                 buyers = [p for p in prices if p.get('price_sell', 0) > 0]
                 if buyers:
                     best = max(buyers, key=lambda x: x['price_sell'])
-                    st.info(f"**Référence Stanton :** {best['price_sell']} aUEC (à {best['terminal_name']})")
+                    st.info(f"**Référence Stanton (au SCU) :** {best['price_sell']} aUEC")
         with c_admin:
             if "Commercial" in USER_GROUPS:
                 st.subheader("🛠️ Régulation")
