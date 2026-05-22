@@ -16,5 +16,22 @@
       "PowerShell(git *)",
       "PowerShell(C:\\Users\\YannMANCHON\\AppData\\Local\\Programs\\Python\\Python312\\python.exe *)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\YannMANCHON\\AppData\\Local\\Programs\\Python\\Python312\\python.exe c:\\Irreguliers-Logistics\\notify.py",
+            "if": "Bash(git commit *)",
+            "async": true,
+            "statusMessage": "Notification Darkias...",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
