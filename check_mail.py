@@ -82,6 +82,7 @@ def fetch_mails(sender_filter=None, n=10, unread_only=False, folder='INBOX'):
 
         results.append({
             'uid': uid.decode(),
+            'msg_id': msg.get('Message-ID', ''),
             'from': sender,
             'subject': subject,
             'date': date_str,
@@ -96,12 +97,13 @@ def print_mails(mails):
     if not mails:
         print("Aucun mail trouvé.")
         return
-    sep = '─' * 70
+    sep = '-' * 70
     for i, m in enumerate(mails):
         print(f"\n{sep}")
         print(f"  De      : {m['from']}")
         print(f"  Sujet   : {m['subject']}")
         print(f"  Date    : {m['date']}")
+        print(f"  Msg-ID  : {m.get('msg_id', '')}")
         print(f"{sep}")
         # Tronque le body si trop long
         body = m['body']
@@ -110,6 +112,34 @@ def print_mails(mails):
         print(body)
     print(f"\n{sep}")
     print(f"  {len(mails)} mail(s) affiché(s)")
+
+
+def send_reply(to, subject, body, reply_to_msg_id=None):
+    """Envoie un mail de réponse via Gmail SMTP."""
+    import smtplib
+    from email.mime.multipart import MIMEMultipart as _MM
+    msg = _MM('alternative')
+    msg['From']    = GMAIL_USER
+    msg['To']      = to
+    msg['Subject'] = subject if subject.startswith('Re:') else f'Re: {subject}'
+    if reply_to_msg_id:
+        msg['In-Reply-To'] = reply_to_msg_id
+        msg['References']  = reply_to_msg_id
+    from email.mime.text import MIMEText as _MT
+    msg.attach(_MT(body, 'plain', 'utf-8'))
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as srv:
+        srv.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+        srv.sendmail(GMAIL_USER, to, msg.as_string())
+
+
+def mark_replied(msg_id):
+    """Marque un Message-ID comme traité dans .mail_replied.json."""
+    from pathlib import Path
+    import json
+    log = Path(__file__).parent / '.mail_replied.json'
+    replied = set(json.loads(log.read_text())) if log.exists() else set()
+    replied.add(msg_id)
+    log.write_text(json.dumps(list(replied)))
 
 
 if __name__ == '__main__':
@@ -124,11 +154,23 @@ if __name__ == '__main__':
                         help='Uniquement les non lus')
     parser.add_argument('--folder', default='INBOX',
                         help='Dossier IMAP (défaut: INBOX)')
+    parser.add_argument('--reply', metavar='MSG_ID',
+                        help='Répond au mail ayant ce Message-ID')
+    parser.add_argument('--reply-body', metavar='BODY',
+                        help='Corps de la réponse (avec --reply)')
     args = parser.parse_args()
 
-    sender = None if args.all_senders else args.sender
-    print(f"Connexion Gmail ({GMAIL_USER})...")
-    if sender:
-        print(f"Filtre : mails de {sender}")
-    mails = fetch_mails(sender_filter=sender, n=args.n, unread_only=args.unread, folder=args.folder)
-    print_mails(mails)
+    if args.reply:
+        if not args.reply_body:
+            print("--reply-body requis avec --reply")
+            exit(1)
+        send_reply(NOTIFY_EMAIL, 'Re: message', args.reply_body, reply_to_msg_id=args.reply)
+        mark_replied(args.reply)
+        print("Reponse envoyee")
+    else:
+        sender = None if args.all_senders else args.sender
+        print(f"Connexion Gmail ({GMAIL_USER})...")
+        if sender:
+            print(f"Filtre : mails de {sender}")
+        mails = fetch_mails(sender_filter=sender, n=args.n, unread_only=args.unread, folder=args.folder)
+        print_mails(mails)

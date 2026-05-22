@@ -41,12 +41,16 @@ if not st.session_state.authenticated:
             if user:
                 st.session_state.authenticated = True
                 st.session_state.user = user
-                # Get permissions from all roles
-                perms = set()
-                for role in user['roles']:
-                    role_perms = uex.get_role_permissions(role['id'])
-                    perms.update(role_perms)
-                st.session_state.permissions = list(perms)
+                if 'permissions' in user:
+                    # Mode WP — permissions déjà calculées par wp_auth
+                    st.session_state.permissions = user['permissions']
+                else:
+                    # Mode SQLite — calcul depuis les rôles locaux
+                    perms = set()
+                    for role in user['roles']:
+                        role_perms = uex.get_role_permissions(role['id'])
+                        perms.update(role_perms)
+                    st.session_state.permissions = list(perms)
                 st.rerun()
             else:
                 st.error("❌ Identifiants incorrects")

@@ -5,8 +5,11 @@ import pandas as pd
 import hashlib
 from datetime import datetime
 from dotenv import load_dotenv
+from wp_auth import WPAuth
 
 load_dotenv()
+
+_wp_auth = WPAuth() if os.getenv('WP_URL') else None
 
 class UEXManager:
     def __init__(self):
@@ -656,7 +659,9 @@ class UEXManager:
         return hashlib.sha256(password.encode()).hexdigest()
 
     def authenticate_user(self, username, password):
-        """Authenticate user with username and password - returns user dict with roles array"""
+        """Authenticate user — WP JWT si WP_URL configuré, sinon SQLite local."""
+        if _wp_auth:
+            return _wp_auth.authenticate(username, password)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
@@ -666,7 +671,6 @@ class UEXManager:
                 row = c.fetchone()
                 if row:
                     user_id, username = row
-                    # Get roles for this user
                     roles = self.get_user_roles(user_id)
                     return {"id": user_id, "username": username, "roles": roles}
                 return None
