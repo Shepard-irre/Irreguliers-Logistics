@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(git checkout *)",
+      "Bash(git merge *)",
+      "Bash(git pull *)",
+      "Bash(git pull)",
+      "Bash(git reset *)",
+      "Bash(git stash *)",
+      "Bash(git tag *)",
+      "Bash(wc *)",
+      "PowerShell(git *)",
+      "PowerShell(C:\\Users\\YannMANCHON\\AppData\\Local\\Programs\\Python\\Python312\\python.exe *)"
+    ]
+  }
+}
