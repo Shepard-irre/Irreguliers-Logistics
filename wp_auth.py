@@ -72,9 +72,9 @@ class WPAuth:
             if not token:
                 return None
 
-            # Récupère les infos utilisateur avec le token
+            # Récupère les infos utilisateur avec le token (context=edit pour avoir les rôles)
             me = requests.get(
-                self.users_endpoint,
+                self.users_endpoint + "?context=edit",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=10
             ).json()
