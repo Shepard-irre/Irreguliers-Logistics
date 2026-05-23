@@ -125,6 +125,44 @@ class WPAuth:
         except Exception as e:
             return None
 
+    def authenticate_with_token(self, token):
+        """
+        Valide un JWT existant via /users/me — utilisé pour le SSO WP → Streamlit.
+        Retourne dict {id, username, roles, email} ou None.
+        """
+        try:
+            me = requests.get(
+                self.users_endpoint + "?context=edit",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10
+            )
+            if me.status_code != 200:
+                return None
+            me = me.json()
+
+            user_id = me.get('id')
+            display_name = me.get('name', '')
+            email = me.get('email', '')
+            wp_roles = me.get('roles', [])
+
+            perms = set()
+            role_names = []
+            for role in wp_roles:
+                if role in UM_ROLE_PERMISSIONS:
+                    perms.update(UM_ROLE_PERMISSIONS[role])
+                    role_names.append(role)
+
+            return {
+                "id": user_id,
+                "username": display_name,
+                "email": email,
+                "roles": [{"id": r, "name": UM_ROLE_LABELS.get(r, r)} for r in role_names],
+                "permissions": list(perms),
+                "token": token
+            }
+        except Exception:
+            return None
+
     def get_permissions_from_roles(self, wp_roles):
         """Calcule les permissions à partir d'une liste de rôles WP/UM."""
         perms = set()

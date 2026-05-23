@@ -35,6 +35,20 @@ if "current_page" not in st.session_state:
 if "permissions" not in st.session_state:
     st.session_state.permissions = []
 
+# --- SSO — auto-login via token passé en URL par WP ---
+if not st.session_state.authenticated:
+    _sso_token = st.query_params.get("token")
+    if _sso_token:
+        from wp_auth import WPAuth
+        _wp = WPAuth()
+        _sso_user = _wp.authenticate_with_token(_sso_token)
+        if _sso_user:
+            st.session_state.authenticated = True
+            st.session_state.user = _sso_user
+            st.session_state.permissions = _sso_user['permissions']
+            st.query_params.clear()
+            st.rerun()
+
 # --- LOGIN PAGE ---
 if not st.session_state.authenticated:
     st.title("🛸 Les Irréguliers - Hub Logistique")
