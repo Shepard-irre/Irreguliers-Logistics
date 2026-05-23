@@ -143,24 +143,32 @@ def mark_replied(msg_id):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Lecture mails Gmail')
-    parser.add_argument('--from', dest='sender', default=NOTIFY_EMAIL,
-                        help=f'Filtre expéditeur (défaut: {NOTIFY_EMAIL})')
-    parser.add_argument('--all', dest='all_senders', action='store_true',
-                        help='Tous les expéditeurs')
-    parser.add_argument('--n', type=int, default=5,
-                        help='Nombre de mails à afficher (défaut: 5)')
-    parser.add_argument('--unread', action='store_true',
-                        help='Uniquement les non lus')
-    parser.add_argument('--folder', default='INBOX',
-                        help='Dossier IMAP (défaut: INBOX)')
-    parser.add_argument('--reply', metavar='MSG_ID',
-                        help='Répond au mail ayant ce Message-ID')
-    parser.add_argument('--reply-body', metavar='BODY',
-                        help='Corps de la réponse (avec --reply)')
+    parser = argparse.ArgumentParser(description='Lecture/envoi mails Gmail')
+    parser.add_argument('--from', dest='sender', default=NOTIFY_EMAIL)
+    parser.add_argument('--all', dest='all_senders', action='store_true')
+    parser.add_argument('--n', type=int, default=5)
+    parser.add_argument('--unread', action='store_true')
+    parser.add_argument('--folder', default='INBOX')
+    # Répondre à un mail existant
+    parser.add_argument('--reply', metavar='MSG_ID')
+    parser.add_argument('--reply-body', metavar='BODY')
+    # Envoyer un nouveau mail sans fichier temp
+    parser.add_argument('--send', action='store_true', help='Envoie un nouveau mail')
+    parser.add_argument('--to', default=NOTIFY_EMAIL)
+    parser.add_argument('--subject', metavar='SUBJECT')
+    parser.add_argument('--body', metavar='BODY')
+    parser.add_argument('--in-reply-to', metavar='MSG_ID')
     args = parser.parse_args()
 
-    if args.reply:
+    if args.send:
+        if not args.subject or not args.body:
+            print("--subject et --body requis avec --send")
+            exit(1)
+        send_reply(args.to, args.subject, args.body, reply_to_msg_id=args.in_reply_to)
+        if args.in_reply_to:
+            mark_replied(args.in_reply_to)
+        print("Mail envoye")
+    elif args.reply:
         if not args.reply_body:
             print("--reply-body requis avec --reply")
             exit(1)

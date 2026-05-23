@@ -13,8 +13,12 @@
       "Bash(git stash *)",
       "Bash(git tag *)",
       "Bash(wc *)",
+      "Bash(rm *)",
       "PowerShell(git *)",
-      "PowerShell(C:\\Users\\YannMANCHON\\AppData\\Local\\Programs\\Python\\Python312\\python.exe *)"
+      "PowerShell(C:\\Users\\YannMANCHON\\AppData\\Local\\Programs\\Python\\Python312\\python.exe *)",
+      "PowerShell(del *)",
+      "Write",
+      "Edit"
     ]
   },
   "hooks": {
