@@ -14,6 +14,28 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Mapping rôles WP/UM → labels lisibles pour l'UI
+UM_ROLE_LABELS = {
+    "administrator":                    "Administrateur",
+    "um_amiral":                        "Amiral",
+    "um_star-commander":                "Star Commander",
+    "um_commander":                     "Commander",
+    "um_lieutenant":                    "Lieutenant",
+    "um_sous-lieutenant":               "Sous-Lieutenant",
+    "um_enseigne":                      "Enseigne",
+    "um_cadet":                         "Cadet",
+    "um_recrue":                        "Recrue",
+    "um_voyageur":                      "Voyageur",
+    "um_industrie":                     "Industrie",
+    "um_navale":                        "Navale",
+    "um_infanterie-mobile":             "Infanterie Mobile",
+    "um_division_marine-marchande":     "Marine Marchande",
+    "um_division_pilotes":              "Pilotes",
+    "um_entretien":                     "Entretien",
+    "metier_transport":                 "Transport",
+    "metier_mecanicien":                "Mécanicien",
+}
+
 # Mapping rôles Ultimate Member → permissions app
 UM_ROLE_PERMISSIONS = {
     # Grades militaires
@@ -95,7 +117,7 @@ class WPAuth:
                 "id": user_id,
                 "username": display_name,
                 "email": email,
-                "roles": [{"id": r, "name": r} for r in role_names],
+                "roles": [{"id": r, "name": UM_ROLE_LABELS.get(r, r)} for r in role_names],
                 "permissions": list(perms),
                 "token": token
             }
