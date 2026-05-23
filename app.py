@@ -1,6 +1,16 @@
 import streamlit as st
-from uex_library import UEXManager
+import os
 import pandas as pd
+
+# Streamlit Cloud : inject secrets into env vars before importing uex_library
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str):
+            os.environ[_k] = _v
+except Exception:
+    pass
+
+from uex_library import UEXManager
 
 st.set_page_config(page_title="Irréguliers Logistics", page_icon="🚀", layout="wide")
 

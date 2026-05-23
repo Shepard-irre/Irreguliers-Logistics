@@ -10,7 +10,6 @@ Usage dans uex_library.py :
 
 import requests
 import os
-import phpserialize
 from dotenv import load_dotenv
 
 load_dotenv()

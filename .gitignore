@@ -2,6 +2,9 @@
 .env
 .env.*
 
+# Streamlit secrets (valeurs réelles)
+.streamlit/secrets.toml
+
 # Base de données
 *.db
 *.dbold
