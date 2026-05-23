@@ -12,6 +12,9 @@ import argparse
 from dotenv import load_dotenv
 from datetime import datetime
 
+# Force UTF-8 sur stdout (Windows cp1252 plante sur certains caractères Unicode)
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 load_dotenv()
 
 GMAIL_USER = os.getenv('GMAIL_USER')
