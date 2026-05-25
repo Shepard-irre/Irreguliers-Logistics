@@ -59,21 +59,17 @@ def fetch_mails(sender_filter=None, n=10, unread_only=False, folder='INBOX'):
     mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
     mail.select(folder)
 
-    criteria = []
-    if unread_only:
-        criteria.append('UNSEEN')
-    if sender_filter:
-        criteria.append(f'FROM "{sender_filter}"')
-
+    # Filtre IMAP uniquement sur UNSEEN — le filtre FROM côté serveur Gmail est peu fiable
+    criteria = ['UNSEEN'] if unread_only else []
     search_str = '(' + ' '.join(criteria) + ')' if criteria else 'ALL'
     _, data = mail.search(None, search_str)
 
     ids = data[0].split()
-    ids = ids[-n:]  # les N plus récents
-    ids = list(reversed(ids))  # plus récent en premier
+    # Prend les N*5 derniers pour avoir de la marge si filtrage Python en aval
+    fetch_ids = list(reversed(ids[-(n * 5):]))
 
     results = []
-    for uid in ids:
+    for uid in fetch_ids:
         _, msg_data = mail.fetch(uid, '(RFC822)')
         raw = msg_data[0][1]
         msg = email.message_from_bytes(raw)
@@ -83,6 +79,10 @@ def fetch_mails(sender_filter=None, n=10, unread_only=False, folder='INBOX'):
         date_str = msg.get('Date', '')
         body = get_body(msg)
 
+        # Filtre expéditeur côté Python — plus fiable que le FROM IMAP de Gmail
+        if sender_filter and sender_filter.lower() not in sender.lower():
+            continue
+
         results.append({
             'uid': uid.decode(),
             'msg_id': msg.get('Message-ID', ''),
@@ -91,6 +91,9 @@ def fetch_mails(sender_filter=None, n=10, unread_only=False, folder='INBOX'):
             'date': date_str,
             'body': body,
         })
+
+        if len(results) >= n:
+            break
 
     mail.logout()
     return results
