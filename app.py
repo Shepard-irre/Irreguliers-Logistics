@@ -174,12 +174,8 @@ st.sidebar.success(f"Citoyen : {user['username']}")
 roles_str = ", ".join([r['name'] for r in user['roles']])
 st.sidebar.info(f"Rôles : {roles_str}")
 
-if st.sidebar.button("🚪 Déconnexion", use_container_width=True):
-    st.session_state.authenticated = False
-    st.session_state.user = None
-    st.session_state.current_page = "Raffineries"
-    st.session_state.permissions = []
-    st.rerun()
+_wp_url = os.getenv("WP_URL", "https://lesirreguliers.fr")
+st.sidebar.link_button("🌐 Retour au site", _wp_url, use_container_width=True)
 
 # --- MAIN CONTENT ---
 st.title("🛸 Les Irréguliers - Hub Logistique")
