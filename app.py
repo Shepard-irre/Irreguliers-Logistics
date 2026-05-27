@@ -706,7 +706,8 @@ elif selected_page == "🔧 Crafting":
                 st.caption(f"**{total}** résultat(s) — affichage des {len(blueprints)} premiers")
                 st.divider()
 
-                can_block = has_permission("page_crafting")
+                can_block = has_permission("crafting_stock_view")
+                can_see_stock = has_permission("crafting_stock_view")
 
                 for bp in blueprints:
                     craft_secs = bp.get("craft_time_seconds", 0)
@@ -721,25 +722,27 @@ elif selected_page == "🔧 Crafting":
                     category = bp.get("category", "?")
                     tiers = bp.get("tiers", 1)
 
-                    # Analyse stock globale pour le badge
-                    all_ok = True
-                    any_missing = False
-                    for ing in ingredients:
-                        lots = uex.get_lots_for_ingredient(ing.get('name', ''))
-                        min_q = int(ing.get('min_quality', 0))
-                        required = float(ing.get('quantity_scu', 0))
-                        if not lots.empty:
-                            dispo = float(lots[(lots['Bloqué'] == 0) & (lots['Qualité'] >= min_q if min_q > 0 else True)]['SCU'].sum())
-                        else:
-                            dispo = 0
-                        if dispo < required:
-                            all_ok = False
-                            if dispo == 0:
-                                any_missing = True
+                    # Analyse stock globale pour le badge (gradés uniquement)
+                    if can_see_stock:
+                        all_ok = True
+                        any_missing = False
+                        for ing in ingredients:
+                            lots = uex.get_lots_for_ingredient(ing.get('name', ''))
+                            min_q = int(ing.get('min_quality', 0))
+                            required = float(ing.get('quantity_scu', 0))
+                            if not lots.empty:
+                                dispo = float(lots[(lots['Bloqué'] == 0) & (lots['Qualité'] >= min_q if min_q > 0 else True)]['SCU'].sum())
+                            else:
+                                dispo = 0
+                            if dispo < required:
+                                all_ok = False
+                                if dispo == 0:
+                                    any_missing = True
+                        stock_badge = "✅" if all_ok else ("⚠️" if not any_missing else "❌")
+                        label = f"{stock_badge} **{bp['name']}** — {category} | ⏱️ {craft_time} | {len(ingredients)} ingrédient(s)"
+                    else:
+                        label = f"**{bp['name']}** — {category} | ⏱️ {craft_time} | {len(ingredients)} ingrédient(s)"
 
-                    stock_badge = "✅" if all_ok else ("⚠️" if not any_missing else "❌")
-
-                    label = f"{stock_badge} **{bp['name']}** — {category} | ⏱️ {craft_time} | {len(ingredients)} ingrédient(s)"
                     if tiers > 1:
                         label += f" | 🔢 Tier {tiers}"
 
@@ -747,38 +750,43 @@ elif selected_page == "🔧 Crafting":
                         if not ingredients:
                             st.info("Aucun ingrédient renseigné pour ce blueprint.")
                         else:
-                            # Tableau d'analyse des ingrédients
-                            rows = []
-                            for ing in ingredients:
-                                ing_name = ing.get('name', '')
-                                required = float(ing.get('quantity_scu', 0))
-                                min_q = int(ing.get('min_quality', 0))
-                                lots = uex.get_lots_for_ingredient(ing_name)
+                            if can_see_stock:
+                                # Tableau d'analyse des ingrédients avec état des stocks
+                                rows = []
+                                for ing in ingredients:
+                                    ing_name = ing.get('name', '')
+                                    required = float(ing.get('quantity_scu', 0))
+                                    min_q = int(ing.get('min_quality', 0))
+                                    lots = uex.get_lots_for_ingredient(ing_name)
 
-                                if not lots.empty:
-                                    mask_qual = (lots['Qualité'] >= min_q) if min_q > 0 else pd.Series([True] * len(lots))
-                                    dispo_ok = float(lots[(lots['Bloqué'] == 0) & mask_qual]['SCU'].sum())
-                                    dispo_total = float(lots[lots['Bloqué'] == 0]['SCU'].sum())
-                                else:
-                                    dispo_ok = 0
-                                    dispo_total = 0
+                                    if not lots.empty:
+                                        mask_qual = (lots['Qualité'] >= min_q) if min_q > 0 else pd.Series([True] * len(lots))
+                                        dispo_ok = float(lots[(lots['Bloqué'] == 0) & mask_qual]['SCU'].sum())
+                                        dispo_total = float(lots[lots['Bloqué'] == 0]['SCU'].sum())
+                                    else:
+                                        dispo_ok = 0
+                                        dispo_total = 0
 
-                                if dispo_ok >= required:
-                                    status = f"✅ {dispo_ok:.2f} SCU"
-                                elif dispo_total > 0:
-                                    status = f"⚠️ {dispo_ok:.2f} SCU (qualité insuff.)"
-                                else:
-                                    status = "❌ Manquant"
+                                    if dispo_ok >= required:
+                                        status = f"✅ {dispo_ok:.2f} SCU"
+                                    elif dispo_total > 0:
+                                        status = f"⚠️ {dispo_ok:.2f} SCU (qualité insuff.)"
+                                    else:
+                                        status = "❌ Manquant"
 
-                                rows.append({
-                                    "Slot": ing.get("slot", "—"),
-                                    "Matière": ing_name,
-                                    "Requis (SCU)": required,
-                                    "Qualité min": min_q if min_q > 0 else "—",
-                                    "Stock disponible": status,
-                                })
+                                    rows.append({
+                                        "Slot": ing.get("slot", "—"),
+                                        "Matière": ing_name,
+                                        "Requis (SCU)": required,
+                                        "Qualité min": min_q if min_q > 0 else "—",
+                                        "Stock disponible": status,
+                                    })
 
-                            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                            else:
+                                # Vue simplifiée — ingrédients sans état des stocks
+                                rows = [{"Slot": ing.get("slot", "—"), "Matière": ing.get("name", ""), "Requis (SCU)": float(ing.get("quantity_scu", 0)), "Qualité min": ing.get("min_quality", "—") or "—"} for ing in ingredients]
+                                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
                             # Blocage des lots pour ce craft
                             if can_block:

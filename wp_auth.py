@@ -79,35 +79,32 @@ UM_ROLE_LABELS = {
     "um_custom_role_30":                "Crafteur",
 }
 
-# Mapping rôles Ultimate Member → permissions app
+# Permissions accordées à TOUS les utilisateurs authentifiés (pas besoin de les lister par rôle)
+DEFAULT_PERMISSIONS = ["page_commerce", "page_gestion_stock", "page_crafting"]
+
+# Mapping rôles → permissions supplémentaires (au-delà des DEFAULT_PERMISSIONS)
+# crafting_stock_view : voir l'état des stocks dans la page Crafting
 UM_ROLE_PERMISSIONS = {
-    # Grades militaires
-    "administrator":            ["admin_panel", "page_raffineries", "page_commerce", "page_gestion_stock",
-                                 "page_stock_federation", "page_commerce_federation", "page_transport", "page_crafting"],
-    "um_amiral":                ["page_raffineries", "page_commerce", "page_gestion_stock",
-                                 "page_stock_federation", "page_commerce_federation", "page_crafting"],
-    "um_star-commander":        ["page_raffineries", "page_commerce", "page_gestion_stock",
-                                 "page_stock_federation", "page_commerce_federation", "page_crafting"],
-    "um_commander":             ["page_raffineries", "page_commerce", "page_gestion_stock",
-                                 "page_stock_federation", "page_commerce_federation", "page_crafting"],
-    "um_lieutenant":            ["page_commerce", "page_stock_federation", "page_commerce_federation"],
-    "um_sous-lieutenant":       ["page_commerce", "page_stock_federation", "page_commerce_federation"],
-    "um_enseigne":              ["page_stock_federation", "page_commerce"],
-    "um_cadet":                 ["page_stock_federation", "page_commerce"],
-    "um_recrue":                ["page_stock_federation"],
-    "um_voyageur":              ["page_stock_federation"],
+    # Grades militaires — accès stock fédé + vue stock crafting
+    "administrator":            ["admin_panel", "page_raffineries", "page_stock_federation",
+                                 "page_commerce_federation", "page_transport", "crafting_stock_view"],
+    "um_sky-marshall":          ["page_stock_federation", "crafting_stock_view"],
+    "um_amiral":                ["page_stock_federation", "crafting_stock_view"],
+    "um_star-commander":        ["page_stock_federation", "crafting_stock_view"],
+    "um_commander":             ["page_stock_federation", "crafting_stock_view"],
+    "um_lieutenant":            ["page_stock_federation", "crafting_stock_view"],
+    "um_sous-lieutenant":       ["crafting_stock_view"],
+    "um_enseigne":              ["crafting_stock_view"],
+    "um_cadet":                 ["crafting_stock_view"],
+    "um_recrue":                ["crafting_stock_view"],
+    "um_voyageur":              ["crafting_stock_view"],
 
     # Divisions
-    "um_industrie":             ["page_raffineries", "page_gestion_stock", "page_crafting"],
-    "um_navale":                ["page_stock_federation", "page_commerce"],
-    "um_infanterie-mobile":     ["page_stock_federation", "page_commerce"],
-    "um_division_marine-marchande": ["page_transport", "page_stock_federation"],
-    "um_division_pilotes":      ["page_stock_federation", "page_commerce"],
-    "um_entretien":             ["page_stock_federation"],
+    "um_division_marine-marchande": ["page_commerce_federation", "page_transport"],
 
     # Métiers
-    "metier_transport":         ["page_transport", "page_stock_federation"],
-    "metier_mecanicien":        ["page_gestion_stock", "page_stock_federation"],
+    "um_custom_role_5":         ["page_raffineries"],  # Mineur
+    "metier_transport":         ["page_transport"],
 }
 
 
@@ -203,7 +200,7 @@ class WPAuth:
             wp_roles = me.get('roles', [])
 
             # Tous les rôles pour l'affichage, permissions calculées séparément
-            perms = set()
+            perms = set(DEFAULT_PERMISSIONS)
             for role in wp_roles:
                 perms.update(UM_ROLE_PERMISSIONS.get(role, []))
 
@@ -231,7 +228,7 @@ class WPAuth:
         try:
             payload = pyjwt.decode(token, secret, algorithms=['HS256'])
             wp_roles = payload.get('roles', [])
-            perms = set()
+            perms = set(DEFAULT_PERMISSIONS)
             for role in wp_roles:
                 perms.update(UM_ROLE_PERMISSIONS.get(role, []))
             return {
