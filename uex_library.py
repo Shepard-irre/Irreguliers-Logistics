@@ -170,7 +170,24 @@ class UEXManager:
         return self._get_data("terminals", params={"type": "refinery"})
 
     def get_refinery_methods(self):
-        return self._get_data("refineries_methods")
+        # Ratings UEX incorrects sur plusieurs méthodes — on overwrite avec les vraies valeurs in-game
+        # Faible=1, Modéré=2, Élevé=3
+        CORRECT_RATINGS = {
+            "Cormack":                 {"rating_yield": 1, "rating_cost": 2, "rating_speed": 2},
+            "Dinyx Solventation":      {"rating_yield": 3, "rating_cost": 1, "rating_speed": 1},
+            "Electrostarolysis":       {"rating_yield": 2, "rating_cost": 2, "rating_speed": 2},
+            "Ferron Exchange":         {"rating_yield": 3, "rating_cost": 2, "rating_speed": 2},
+            "Gaskin Process":          {"rating_yield": 2, "rating_cost": 3, "rating_speed": 3},
+            "Kazen Winnowing":         {"rating_yield": 1, "rating_cost": 1, "rating_speed": 1},
+            "Pyrometric Chromalysis":  {"rating_yield": 3, "rating_cost": 3, "rating_speed": 3},
+            "Thermonatic Deposition":  {"rating_yield": 2, "rating_cost": 1, "rating_speed": 1},
+            "XCR Reaction":            {"rating_yield": 1, "rating_cost": 3, "rating_speed": 3},
+        }
+        methods = self._get_data("refineries_methods")
+        for m in methods:
+            if m.get('name') in CORRECT_RATINGS:
+                m.update(CORRECT_RATINGS[m['name']])
+        return methods
 
     def calculate_refinery_estimate(self, commodity_id, terminal_id, method_code, quantity):
         # --- Données locales (jobs confirmés par nos mineurs) ---

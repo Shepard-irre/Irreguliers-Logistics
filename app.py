@@ -221,8 +221,7 @@ if selected_page == "🏗️ Raffineries":
             with c2:
                 sel_method_name = st.selectbox("Méthode :", list(method_map.keys()), key="ref_method")
                 m = method_map[sel_method_name]
-                speed_stars = 4 - m['rating_speed']  # UEX : 1=rapide, 3=lent → on inverse pour l'affichage
-st.caption(f"Rendement : {'⭐'*m['rating_yield']} | Coût : {'⭐'*m['rating_cost']} | Vitesse : {'⭐'*speed_stars}")
+                st.caption(f"Rendement : {'⭐'*m['rating_yield']} | Coût : {'⭐'*m['rating_cost']} | Vitesse : {'⭐'*m['rating_speed']}")
 
             st.divider()
 
