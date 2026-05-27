@@ -171,7 +171,7 @@ selected_page = st.sidebar.radio("Aller à :", nav_options, label_visibility="co
 st.session_state.current_page = selected_page
 
 st.sidebar.divider()
-st.sidebar.success(f"Pilote : {user['username']}")
+st.sidebar.success(f"Citoyen : {user['username']}")
 
 # Display roles
 roles_str = ", ".join([r['name'] for r in user['roles']])
