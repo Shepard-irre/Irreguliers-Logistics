@@ -34,6 +34,8 @@ UM_ROLE_LABELS = {
     "um_entretien":                     "Entretien",
     "metier_transport":                 "Transport",
     "metier_mecanicien":                "Mécanicien",
+    "um_custom_role_2":                 "Génie Industriel",
+    "um_custom_role_5":                 "Mineur",
 }
 
 # Mapping rôles Ultimate Member → permissions app
