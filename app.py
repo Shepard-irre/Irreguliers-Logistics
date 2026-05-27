@@ -14,6 +14,56 @@ from uex_library import UEXManager
 
 st.set_page_config(page_title="Irréguliers Logistics", page_icon="🚀", layout="wide")
 
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Roboto:wght@400;500;700&family=Roboto+Slab:wght@600&display=swap');
+
+html, body, [class*="css"] { font-family: 'Roboto', sans-serif; }
+
+h1, h2, h3 { font-family: 'Alfa Slab One', serif !important; letter-spacing: 1px; }
+
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0d1b2a 0%, #183c51 100%) !important;
+    border-right: 1px solid #1b79ff33;
+}
+
+[data-testid="stSidebar"] * { font-family: 'Roboto', sans-serif !important; }
+
+[data-testid="metric-container"] {
+    background: #183c51;
+    border: 1px solid #1b79ff44;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.stButton > button {
+    background: linear-gradient(135deg, #0061c5, #1b79ff) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-family: 'Roboto', sans-serif !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.5px;
+}
+
+.stButton > button:hover {
+    background: linear-gradient(135deg, #1b79ff, #6EC1E4) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px #1b79ff55;
+}
+
+[data-testid="stDataFrame"] { border: 1px solid #1b79ff33; border-radius: 8px; }
+
+.stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #1b79ff44; }
+.stTabs [aria-selected="true"] { color: #1b79ff !important; border-bottom: 2px solid #1b79ff !important; }
+
+div[data-testid="stInfo"] { border-left: 4px solid #1b79ff; background: #183c5188; }
+div[data-testid="stSuccess"] { border-left: 4px solid #61CE70; background: #2a813622; }
+div[data-testid="stWarning"] { border-left: 4px solid #ffd512; background: #d68d1922; }
+div[data-testid="stError"] { border-left: 4px solid #db1010; background: #db101022; }
+</style>
+""", unsafe_allow_html=True)
+
 # Cache les appels API pour éviter les requêtes répétées
 @st.cache_resource
 def get_uex_manager():
