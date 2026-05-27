@@ -141,9 +141,6 @@ CAT_MAP = {
 
 # --- SIDEBAR NAVIGATION ---
 user = st.session_state.user
-wallet = uex.get_wallet()
-
-st.sidebar.metric(f"Solde {user['username']}", f"{wallet.get('balance', 0):,} aUEC")
 st.sidebar.divider()
 
 # Build navigation menu based on permissions
@@ -545,9 +542,13 @@ elif selected_page == "📦 Stock Fédération":
     lots_df_metric = uex.get_commodity_lots()
     total_minerals = round(lots_df_metric[lots_df_metric['Bloqué'] == 0]['SCU'].sum(), 1) if not lots_df_metric.empty else 0
 
-    m1, m2 = st.columns(2)
+    wallet = uex.get_wallet()
+    fed_balance = wallet.get('balance', 0)
+
+    m1, m2, m3 = st.columns(3)
     m1.metric("Composants en stock", f"{total_components:,}")
     m2.metric("Minerais en stock (SCU)", f"{total_minerals:,}")
+    m3.metric("Solde Fédération", f"{fed_balance:,} aUEC")
     st.divider()
 
     inv, log = st.columns([3, 2])
