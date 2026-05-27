@@ -39,9 +39,7 @@ if "permissions" not in st.session_state:
 if not st.session_state.authenticated:
     _sso_token = st.query_params.get("token")
     if _sso_token:
-        from wp_auth import WPAuth
-        _wp = WPAuth()
-        _sso_user = _wp.authenticate_with_token(_sso_token)
+        _sso_user = uex.authenticate_with_token(_sso_token)
         if _sso_user:
             st.session_state.authenticated = True
             st.session_state.user = _sso_user

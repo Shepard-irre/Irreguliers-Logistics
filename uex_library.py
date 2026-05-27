@@ -498,6 +498,11 @@ class UEXManager:
             return _wp_auth.authenticate(username, password)
         return None
 
+    def authenticate_with_token(self, token):
+        if _wp_auth:
+            return _wp_auth.authenticate_with_token(token)
+        return None
+
     # --- CRAFTING ---
     def get_blueprints_from_api(self, search='', page=1, limit=20):
         """Fetch blueprints from sc-craft.tools (no auth required)"""
