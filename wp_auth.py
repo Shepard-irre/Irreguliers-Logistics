@@ -201,19 +201,16 @@ class WPAuth:
             email = me.get('email', '')
             wp_roles = me.get('roles', [])
 
-            # Mappe les rôles WP/UM → permissions app
+            # Tous les rôles pour l'affichage, permissions calculées séparément
             perms = set()
-            role_names = []
             for role in wp_roles:
-                if role in UM_ROLE_PERMISSIONS:
-                    perms.update(UM_ROLE_PERMISSIONS[role])
-                    role_names.append(role)
+                perms.update(UM_ROLE_PERMISSIONS.get(role, []))
 
             return {
                 "id": user_id,
                 "username": display_name,
                 "email": email,
-                "roles": [{"id": r, "name": self._role_labels.get(r, r)} for r in role_names],
+                "roles": [{"id": r, "name": self._role_labels.get(r, r)} for r in wp_roles],
                 "permissions": list(perms),
                 "token": token
             }
@@ -242,17 +239,14 @@ class WPAuth:
             wp_roles = me.get('roles', [])
 
             perms = set()
-            role_names = []
             for role in wp_roles:
-                if role in UM_ROLE_PERMISSIONS:
-                    perms.update(UM_ROLE_PERMISSIONS[role])
-                    role_names.append(role)
+                perms.update(UM_ROLE_PERMISSIONS.get(role, []))
 
             return {
                 "id": user_id,
                 "username": display_name,
                 "email": email,
-                "roles": [{"id": r, "name": self._role_labels.get(r, r)} for r in role_names],
+                "roles": [{"id": r, "name": self._role_labels.get(r, r)} for r in wp_roles],
                 "permissions": list(perms),
                 "token": token
             }
