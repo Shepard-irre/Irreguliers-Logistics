@@ -20,7 +20,9 @@ st.markdown("""
 
 html, body, [class*="css"] { font-family: 'Roboto', sans-serif; }
 
-h1, h2, h3 { font-family: 'Alfa Slab One', serif !important; letter-spacing: 1px; }
+h1 { font-family: 'Alfa Slab One', serif !important; letter-spacing: 2px; color: #6EC1E4 !important; }
+h2 { font-family: 'Roboto Slab', serif !important; font-weight: 600 !important; letter-spacing: 0.5px; }
+h3 { font-family: 'Roboto Slab', serif !important; font-weight: 600 !important; letter-spacing: 0.3px; }
 
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #0d1b2a 0%, #183c51 100%) !important;
