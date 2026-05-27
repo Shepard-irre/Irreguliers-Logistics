@@ -11,6 +11,7 @@ Usage dans uex_library.py :
 import requests
 import os
 import re
+import jwt as pyjwt
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -220,32 +221,23 @@ class WPAuth:
 
     def authenticate_with_token(self, token):
         """
-        Valide un JWT existant via /users/me — utilisé pour le SSO WP → Streamlit.
+        Valide un JWT SSO généré par irr/v1/sso-token.
+        Décode localement avec IRR_JWT_SECRET — pas d'appel WP API.
         Retourne dict {id, username, roles, email} ou None.
         """
+        secret = os.getenv('IRR_JWT_SECRET', '')
+        if not secret:
+            return None
         try:
-            me = requests.get(
-                self.users_endpoint + "?context=edit",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=10
-            )
-            if me.status_code != 200:
-                return None
-            me = me.json()
-
-            user_id = me.get('id')
-            display_name = me.get('name', '')
-            email = me.get('email', '')
-            wp_roles = me.get('roles', [])
-
+            payload = pyjwt.decode(token, secret, algorithms=['HS256'])
+            wp_roles = payload.get('roles', [])
             perms = set()
             for role in wp_roles:
                 perms.update(UM_ROLE_PERMISSIONS.get(role, []))
-
             return {
-                "id": user_id,
-                "username": display_name,
-                "email": email,
+                "id": payload.get('user_id'),
+                "username": payload.get('username', ''),
+                "email": payload.get('email', ''),
                 "roles": [{"id": r, "name": self._role_labels.get(r, r)} for r in wp_roles],
                 "permissions": list(perms),
                 "token": token
