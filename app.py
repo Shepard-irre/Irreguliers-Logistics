@@ -340,26 +340,31 @@ if selected_page == "🏗️ Raffineries":
                     if not summary['orders_vente'] and not summary['orders_stock_fed']:
                         st.caption("Aucun bon de transport rattaché à cette session.")
                     else:
-                        # Map nom commodity -> id (fallback si JOIN NULL)
+                        # Map nom nettoyé -> id du minerai RAFFINÉ (priorité aux entrées sans suffixe)
+                        # Les IDs en DB sont ceux du brut (ex: Stileron Raw id=162) sans prix
+                        # Il faut mapper vers le raffiné (ex: Stileron id=122) qui lui a des prix
                         all_comms = fetch_commodities() or []
                         comm_name_map = {}
                         for c in all_comms:
                             name = c.get('name', '')
-                            comm_name_map[name.lower()] = c.get('id')
-                            # Sans suffixes courants
-                            clean = name.lower().replace(' (ore)', '').replace(' (raw)', '').strip()
-                            comm_name_map[clean] = c.get('id')
+                            name_lower = name.lower()
+                            clean = name_lower.replace(' (ore)', '').replace(' (raw)', '').strip()
+                            if clean == name_lower:
+                                # Entrée sans suffixe = minerai raffiné → priorité absolue
+                                comm_name_map[clean] = c.get('id')
+                            else:
+                                # Entrée brute → seulement si pas déjà mappé par le raffiné
+                                if clean not in comm_name_map:
+                                    comm_name_map[clean] = c.get('id')
 
                         # Estimer revenus depuis UEX selon le système de la session
                         system_name = detail['star_system']
                         total_vente_auec = 0
                         vente_lines = []
                         for order in summary['orders_vente']:
-                            comm_id = order.get('commodity_id')
-                            if not comm_id:
-                                # Fallback : recherche par nom
-                                name_clean = order['commodity_name'].lower().replace(' (ore)', '').replace(' (raw)', '').strip()
-                                comm_id = comm_name_map.get(name_clean) or comm_name_map.get(order['commodity_name'].lower())
+                            # Toujours chercher par nom nettoyé — l'ID en DB est celui du brut (sans prix)
+                            name_clean = order['commodity_name'].lower().replace(' (ore)', '').replace(' (raw)', '').strip()
+                            comm_id = comm_name_map.get(name_clean)
                             if comm_id:
                                 prices = uex.get_prices_for_item(int(comm_id))
                                 buyers_sys = [p for p in prices
