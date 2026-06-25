@@ -701,9 +701,11 @@ class UEXManager:
             # Bons de transport de la session
             orders_df = pd.read_sql_query("""
                 SELECT t.id, t.commodity_name, t.quantity, t.quality, t.destination,
-                       t.status, t.lot_id, cl.commodity_id
+                       t.status, t.lot_id,
+                       COALESCE(cl.commodity_id, rj.commodity_id) as commodity_id
                 FROM transport_orders t
                 LEFT JOIN commodity_lots cl ON t.lot_id = cl.id
+                LEFT JOIN refinery_jobs rj ON t.refinery_job_id = rj.id
                 WHERE t.session_id = ?
             """, conn, params=(session_id,))
 

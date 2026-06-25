@@ -340,12 +340,26 @@ if selected_page == "🏗️ Raffineries":
                     if not summary['orders_vente'] and not summary['orders_stock_fed']:
                         st.caption("Aucun bon de transport rattaché à cette session.")
                     else:
+                        # Map nom commodity -> id (fallback si JOIN NULL)
+                        all_comms = fetch_commodities() or []
+                        comm_name_map = {}
+                        for c in all_comms:
+                            name = c.get('name', '')
+                            comm_name_map[name.lower()] = c.get('id')
+                            # Sans suffixes courants
+                            clean = name.lower().replace(' (ore)', '').replace(' (raw)', '').strip()
+                            comm_name_map[clean] = c.get('id')
+
                         # Estimer revenus depuis UEX selon le système de la session
                         system_name = detail['star_system']
                         total_vente_auec = 0
                         vente_lines = []
                         for order in summary['orders_vente']:
                             comm_id = order.get('commodity_id')
+                            if not comm_id:
+                                # Fallback : recherche par nom
+                                name_clean = order['commodity_name'].lower().replace(' (ore)', '').replace(' (raw)', '').strip()
+                                comm_id = comm_name_map.get(name_clean) or comm_name_map.get(order['commodity_name'].lower())
                             if comm_id:
                                 prices = uex.get_prices_for_item(int(comm_id))
                                 buyers_sys = [p for p in prices
