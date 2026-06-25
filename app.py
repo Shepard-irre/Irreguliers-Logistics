@@ -459,13 +459,43 @@ elif selected_page == "💰 Commerce":
         if st.button("Calculer les points de vente", use_container_width=True):
             prices = uex.get_prices_for_item(comm_map[sel_st])
             buyers = [p for p in prices if p.get('price_sell', 0) > 0]
-            if buyers:
-                df = pd.DataFrame(buyers).sort_values(by="price_sell", ascending=False)
+            st.session_state['commerce_results'] = buyers
+            st.rerun()
+
+        if st.session_state.get('commerce_results'):
+            buyers = st.session_state['commerce_results']
+            df_all = pd.DataFrame(buyers).sort_values(by="price_sell", ascending=False)
+
+            systems = sorted(df_all['star_system_name'].dropna().unique().tolist())
+            sys_options = ["Tous"] + systems
+            sel_sys = st.radio("Système :", sys_options, horizontal=True, key="commerce_sys_filter")
+
+            df = df_all if sel_sys == "Tous" else df_all[df_all['star_system_name'] == sel_sys]
+
+            if df.empty:
+                st.info("Aucun acheteur dans ce système.")
+            else:
                 scu_price_max = df.iloc[0]['price_sell']
                 total_val = scu_price_max * vol_st
-
                 st.metric(f"Valeur Marché Max ({vol_st} SCU)", f"{total_val:,} aUEC")
-                st.table(df[['terminal_name', 'price_sell', 'star_system_name']].rename(columns={'terminal_name':'Terminal', 'price_sell':'Prix Unit'}))
+
+                def fmt_containers(s):
+                    if not s:
+                        return "?"
+                    sizes = [int(x) for x in str(s).split(',') if x.strip().isdigit()]
+                    return f"1–{max(sizes)} SCU" if sizes else "?"
+
+                display = df[['terminal_name', 'price_sell', 'star_system_name', 'container_sizes', 'scu_sell_stock']].copy()
+                display['container_sizes'] = display['container_sizes'].apply(fmt_containers)
+                display['scu_sell_stock'] = display['scu_sell_stock'].apply(lambda x: f"{int(x)} SCU" if x else "—")
+                display = display.rename(columns={
+                    'terminal_name': 'Terminal',
+                    'price_sell': 'Prix/SCU (aUEC)',
+                    'star_system_name': 'Système',
+                    'container_sizes': 'Caisses',
+                    'scu_sell_stock': 'Qté présente',
+                })
+                st.dataframe(display, use_container_width=True, hide_index=True)
 
 # --- PAGE 3 : GESTION DE STOCK FÉDÉRATION ---
 elif selected_page == "📦 Gestion de stock Fédération":
