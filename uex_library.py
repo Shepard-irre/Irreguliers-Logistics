@@ -209,6 +209,12 @@ class UEXManager:
                       (user, action_type, name, abs(delta), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             conn.commit()
 
+    def get_vehicles(self, is_mining=None):
+        data = self._get_data("vehicles")
+        if is_mining is not None:
+            data = [v for v in data if v.get('is_mining') == (1 if is_mining else 0)]
+        return sorted(data, key=lambda v: v.get('name', ''))
+
     # --- REFINERY API ---
     def get_refinable_commodities(self):
         comms = self._get_data("commodities")

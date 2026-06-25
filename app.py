@@ -132,17 +132,13 @@ def has_permission(permission):
 # --- CONFIGURATION ---
 STAR_SYSTEMS = ["Stanton", "Pyro", "Nyx"]
 
-MINING_SHIPS = [
-    "MISC Prospector", "MISC Mole", "Greycat Golem",
-    "Greycat ROC", "Greycat ROC-DS",
-]
-ESCORT_SHIPS = [
-    "Anvil Arrow", "Anvil Hornet F7C", "Anvil Hurricane",
-    "Aegis Gladius", "Aegis Sabre", "Aegis Avenger Titan",
-    "Aegis Vanguard Warden", "Drake Cutlass Black",
-    "Crusader Ares Ion", "Crusader Ares Inferno",
-    "Origin 135c", "RSI Constellation Andromeda",
-]
+@st.cache_data(ttl=3600)
+def fetch_mining_ships():
+    return [v['name'] for v in uex.get_vehicles(is_mining=True)]
+
+@st.cache_data(ttl=3600)
+def fetch_all_ships():
+    return [v['name'] for v in uex.get_vehicles()]
 
 CAT_MAP = {
     "🌌 Moteurs Quantum (QT Drive)": [22, 86],
@@ -289,8 +285,8 @@ if selected_page == "🏗️ Raffineries":
                         st.markdown("**Ajouter un vaisseau**")
                         av1, av2, av3, av4 = st.columns([2, 2, 1, 1])
                         with av1:
-                            all_ships = MINING_SHIPS + ESCORT_SHIPS
-                            ship_choice = st.selectbox("Vaisseau :", all_ships, key=f"ship_sel_{sess_id}")
+                            all_ships_list = fetch_all_ships()
+                            ship_choice = st.selectbox("Vaisseau :", all_ships_list, key=f"ship_sel_{sess_id}")
                         with av2:
                             ship_custom = st.text_input("Ou saisir :", key=f"ship_custom_{sess_id}", placeholder="Autre vaisseau")
                         with av3:
