@@ -130,6 +130,20 @@ def has_permission(permission):
 # --- LOGGED IN - MAIN APP STARTS HERE ---
 
 # --- CONFIGURATION ---
+STAR_SYSTEMS = ["Stanton", "Pyro", "Nyx"]
+
+MINING_SHIPS = [
+    "MISC Prospector", "MISC Mole", "Greycat Golem",
+    "Greycat ROC", "Greycat ROC-DS",
+]
+ESCORT_SHIPS = [
+    "Anvil Arrow", "Anvil Hornet F7C", "Anvil Hurricane",
+    "Aegis Gladius", "Aegis Sabre", "Aegis Avenger Titan",
+    "Aegis Vanguard Warden", "Drake Cutlass Black",
+    "Crusader Ares Ion", "Crusader Ares Inferno",
+    "Origin 135c", "RSI Constellation Andromeda",
+]
+
 CAT_MAP = {
     "🌌 Moteurs Quantum (QT Drive)": [22, 86],
     "🛡️ Boucliers (Shields)": [23],
@@ -184,7 +198,199 @@ st.title("🛸 Les Irréguliers - Hub Logistique")
 if selected_page == "🏗️ Raffineries":
     st.header("🏗️ Raffineries")
 
-    tab_estim, tab_confirm = st.tabs(["🔬 Nouvelle estimation", "⏳ Jobs en attente"])
+    tab_sessions, tab_estim, tab_confirm = st.tabs(["📋 Sessions de minage", "🔬 Nouvelle estimation", "⏳ Jobs en attente"])
+
+    # --- ONGLET SESSIONS DE MINAGE ---
+    with tab_sessions:
+        st.subheader("📋 Sessions de minage")
+
+        # Créer une nouvelle session
+        with st.expander("➕ Créer une nouvelle session", expanded=False):
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                new_sys = st.selectbox("Système :", STAR_SYSTEMS, key="new_session_system")
+            with sc2:
+                st.write("")
+                st.write("")
+                if st.button("🚀 Créer la session", type="primary", use_container_width=True):
+                    s = uex.create_mining_session(user['username'], new_sys)
+                    st.success(f"Session **{s['numero']}** créée !")
+                    st.rerun()
+
+        # Liste des sessions
+        sessions_df = uex.get_mining_sessions()
+        if sessions_df.empty:
+            st.info("Aucune session de minage.")
+        else:
+            STATUS_LABELS = {
+                'open': '🟡 En cours',
+                'completed': '✅ Terminée',
+                'cancelled': '❌ Annulée',
+            }
+            for _, sess in sessions_df.iterrows():
+                sess_id = int(sess['id'])
+                label = f"**{sess['numero']}** — {sess['star_system']} — {STATUS_LABELS.get(sess['status'], sess['status'])} — {sess['date_created'][:10]}"
+                with st.expander(label, expanded=(sess['status'] == 'open')):
+                    detail = uex.get_mining_session(sess_id)
+
+                    # Statut
+                    col_st, col_close = st.columns([3, 1])
+                    with col_st:
+                        st.caption(f"Créée par {detail['created_by']} le {detail['date_created'][:10]}")
+                    with col_close:
+                        if detail['status'] == 'open':
+                            if st.button("✅ Clore la session", key=f"close_{sess_id}", use_container_width=True):
+                                uex.set_session_status(sess_id, 'completed')
+                                st.rerun()
+
+                    st.divider()
+
+                    # --- Vaisseaux ---
+                    st.markdown("**⚓ Vaisseaux**")
+                    for ship in detail['ships']:
+                        ship_id = int(ship['id'])
+                        role_icon = "⛏️" if ship['ship_role'] == 'mining' else "🛡️"
+                        with st.container():
+                            sh1, sh2, sh3 = st.columns([3, 1, 1])
+                            sh1.write(f"{role_icon} **{ship['ship_name']}** ({ship['ship_role']})")
+                            with sh3:
+                                if detail['status'] == 'open':
+                                    if st.button("🗑️", key=f"del_ship_{ship_id}", use_container_width=True):
+                                        uex.remove_session_ship(ship_id)
+                                        st.rerun()
+
+                            # Équipage du vaisseau
+                            crew_list = ship['crew']
+                            if crew_list:
+                                crew_names = ", ".join([c['username'] for c in crew_list])
+                                st.caption(f"  Équipage : {crew_names}")
+                                if detail['status'] == 'open':
+                                    for cm in crew_list:
+                                        cc1, cc2 = st.columns([4, 1])
+                                        cc1.write(f"  — {cm['username']}")
+                                        with cc2:
+                                            if st.button("✖", key=f"del_crew_{cm['id']}", use_container_width=True):
+                                                uex.remove_crew_member(int(cm['id']))
+                                                st.rerun()
+                            else:
+                                st.caption("  Aucun membre")
+
+                            if detail['status'] == 'open':
+                                new_member = st.text_input(
+                                    "Ajouter un membre :", key=f"add_crew_{ship_id}",
+                                    placeholder="pseudo du joueur")
+                                if st.button("➕ Ajouter membre", key=f"btn_crew_{ship_id}"):
+                                    if new_member.strip():
+                                        uex.add_crew_member(ship_id, new_member.strip())
+                                        st.rerun()
+
+                    if detail['status'] == 'open':
+                        st.divider()
+                        st.markdown("**Ajouter un vaisseau**")
+                        av1, av2, av3, av4 = st.columns([2, 2, 1, 1])
+                        with av1:
+                            all_ships = MINING_SHIPS + ESCORT_SHIPS
+                            ship_choice = st.selectbox("Vaisseau :", all_ships, key=f"ship_sel_{sess_id}")
+                        with av2:
+                            ship_custom = st.text_input("Ou saisir :", key=f"ship_custom_{sess_id}", placeholder="Autre vaisseau")
+                        with av3:
+                            ship_role_sel = st.selectbox("Rôle :", ["mining", "escort"], key=f"ship_role_{sess_id}")
+                        with av4:
+                            st.write("")
+                            st.write("")
+                            if st.button("➕", key=f"btn_ship_{sess_id}", use_container_width=True):
+                                ship_name = ship_custom.strip() if ship_custom.strip() else ship_choice
+                                uex.add_session_ship(sess_id, ship_name, ship_role_sel)
+                                st.rerun()
+
+                    st.divider()
+
+                    # --- Frais ---
+                    st.markdown("**💸 Frais de session**")
+                    if detail['expenses']:
+                        total_exp = sum(e['amount_auec'] for e in detail['expenses'])
+                        for exp in detail['expenses']:
+                            fe1, fe2, fe3 = st.columns([3, 2, 1])
+                            fe1.write(exp['description'])
+                            fe2.write(f"{exp['amount_auec']:,.0f} aUEC")
+                            with fe3:
+                                if detail['status'] == 'open':
+                                    if st.button("🗑️", key=f"del_exp_{exp['id']}", use_container_width=True):
+                                        uex.remove_session_expense(int(exp['id']))
+                                        st.rerun()
+                        st.caption(f"Total frais : **{total_exp:,.0f} aUEC**")
+                    else:
+                        st.caption("Aucun frais saisi.")
+
+                    if detail['status'] == 'open':
+                        ef1, ef2, ef3 = st.columns([3, 2, 1])
+                        with ef1:
+                            exp_desc = st.text_input("Description :", key=f"exp_desc_{sess_id}", placeholder="Carburant Prospector")
+                        with ef2:
+                            exp_amt = st.number_input("Montant (aUEC) :", min_value=0, value=0, key=f"exp_amt_{sess_id}")
+                        with ef3:
+                            st.write("")
+                            st.write("")
+                            if st.button("➕", key=f"btn_exp_{sess_id}", use_container_width=True):
+                                if exp_desc.strip() and exp_amt > 0:
+                                    uex.add_session_expense(sess_id, exp_desc.strip(), exp_amt)
+                                    st.rerun()
+
+                    st.divider()
+
+                    # --- Rapport financier ---
+                    st.markdown("**📊 Rapport financier**")
+                    summary = uex.get_session_financial_summary(sess_id)
+                    if not summary['orders_vente'] and not summary['orders_stock_fed']:
+                        st.caption("Aucun bon de transport rattaché à cette session.")
+                    else:
+                        # Estimer revenus depuis UEX selon le système de la session
+                        system_name = detail['star_system']
+                        total_vente_auec = 0
+                        vente_lines = []
+                        for order in summary['orders_vente']:
+                            comm_id = order.get('commodity_id')
+                            if comm_id:
+                                prices = uex.get_prices_for_item(int(comm_id))
+                                buyers_sys = [p for p in prices
+                                              if p.get('price_sell', 0) > 0
+                                              and p.get('star_system_name') == system_name]
+                                if not buyers_sys:
+                                    buyers_sys = [p for p in prices if p.get('price_sell', 0) > 0]
+                                best_price = max((p['price_sell'] for p in buyers_sys), default=0)
+                            else:
+                                best_price = 0
+                            rev = best_price * order['quantity']
+                            total_vente_auec += rev
+                            vente_lines.append({
+                                'Minerai': order['commodity_name'],
+                                'SCU': order['quantity'],
+                                'Prix/SCU': f"{best_price:,} aUEC",
+                                'Recette estimée': f"{rev:,.0f} aUEC",
+                            })
+
+                        if vente_lines:
+                            st.dataframe(pd.DataFrame(vente_lines), use_container_width=True, hide_index=True)
+
+                        total_exp = summary['total_expenses']
+                        part_fed = total_vente_auec * 0.20
+                        part_transport = total_vente_auec * 0.15
+                        reste = total_vente_auec - part_fed - part_transport - total_exp
+                        nb = summary['nb_joueurs']
+                        salaire = reste / nb if nb > 0 else 0
+
+                        r1, r2, r3 = st.columns(3)
+                        r1.metric("Recette totale estimée", f"{total_vente_auec:,.0f} aUEC")
+                        r2.metric("Part Fédération (20%)", f"{part_fed:,.0f} aUEC")
+                        r3.metric("Part Transporteurs (15%)", f"{part_transport:,.0f} aUEC")
+
+                        r4, r5, r6 = st.columns(3)
+                        r4.metric("Frais vaisseaux", f"{total_exp:,.0f} aUEC")
+                        r5.metric("Reste à partager", f"{reste:,.0f} aUEC")
+                        r6.metric(f"Salaire/joueur ({nb} joueurs)", f"{salaire:,.0f} aUEC")
+
+                        if summary['crew']:
+                            st.caption(f"Mineurs présents : {', '.join(summary['crew'])}")
 
     # --- ONGLET ESTIMATION ---
     with tab_estim:
@@ -206,6 +412,18 @@ if selected_page == "🏗️ Raffineries":
                 st.session_state['refinery_lines'] = []
             if 'refinery_estimates' not in st.session_state:
                 st.session_state['refinery_estimates'] = []
+
+            # --- Session rattachée ---
+            open_sessions_df = uex.get_mining_sessions(status='open')
+            session_options = {"(aucune)": None}
+            if not open_sessions_df.empty:
+                for _, sr in open_sessions_df.iterrows():
+                    session_options[f"{sr['numero']} — {sr['star_system']}"] = int(sr['id'])
+            sel_session_label = st.selectbox(
+                "Rattacher à une session de minage :", list(session_options.keys()), key="ref_session")
+            sel_session_id = session_options[sel_session_label]
+
+            st.divider()
 
             # --- Station + Méthode (partagées pour tout le batch) ---
             c1, c2 = st.columns(2)
@@ -315,7 +533,8 @@ if selected_page == "🏗️ Raffineries":
                                     est['terminal_id'], est['terminal_name'],
                                     est['method'], est['quantity'],
                                     corrected, est['yield_pct'],
-                                    est['confidence'], est['audit_count']
+                                    est['confidence'], est['audit_count'],
+                                    session_id=sel_session_id
                                 )
                                 st.session_state['pending_quality'] = st.session_state.get('pending_quality', {})
                                 st.session_state['pending_quality'][est['commodity_id']] = quality_final
@@ -334,7 +553,8 @@ if selected_page == "🏗️ Raffineries":
                                 est['terminal_id'], est['terminal_name'],
                                 est['method'], est['quantity'],
                                 est['estimated_output'], est['yield_pct'],
-                                est['confidence'], est['audit_count']
+                                est['confidence'], est['audit_count'],
+                                session_id=sel_session_id
                             )
                     st.session_state['refinery_lines'] = []
                     st.session_state['refinery_estimates'] = []
@@ -378,6 +598,25 @@ if selected_page == "🏗️ Raffineries":
                         ql = "🟢" if quality >= 700 else "🟡" if quality >= 400 else "🔴"
                         st.caption(f"{ql} {quality}/1000")
 
+                    # Destination : auto selon qualité, modifiable
+                    default_dest = "stock_federal" if quality >= 750 else "vente"
+                    dest_label = st.radio(
+                        "Destination :",
+                        ["vente", "stock_federal"],
+                        format_func=lambda x: "💰 Vente" if x == "vente" else "🏛️ Stock Fédéral",
+                        index=0 if default_dest == "vente" else 1,
+                        horizontal=True,
+                        key=f"dest_{job['id']}"
+                    )
+                    if dest_label == "stock_federal":
+                        st.caption("🏛️ Qualité ≥ 750 → Stock Fédéral par défaut")
+                    delivery_loc = "Stock Fédération" if dest_label == "stock_federal" else "Marché (à définir)"
+
+                    # Session associée au job
+                    job_session_id = job.get('session_id')
+                    if pd.notna(job_session_id) and job_session_id:
+                        st.caption(f"Session : MIN{int(job_session_id):03d}")
+
                     pickup_loc = st.text_input(
                         "Lieu de pickup :",
                         value=job['terminal_name'].split(' (')[0],
@@ -392,6 +631,7 @@ if selected_page == "🏗️ Raffineries":
                         if st.button("✅ Confirmer le raffinage", type="primary", use_container_width=True, key=f"confirm_{job['id']}"):
                             result = uex.confirm_refinery_job(int(job['id']), actual_qty, quality)
                             if result:
+                                sess_id_for_order = int(job_session_id) if (pd.notna(job_session_id) and job_session_id) else None
                                 uex.create_transport_order(
                                     created_by=user['username'],
                                     assigned_to='Camus68',
@@ -399,10 +639,12 @@ if selected_page == "🏗️ Raffineries":
                                     quantity=actual_qty,
                                     quality=quality,
                                     pickup_location=pickup_loc,
-                                    delivery_location="Stock Fédération",
+                                    delivery_location=delivery_loc,
                                     refinery_job_id=int(job['id']),
                                     lot_id=result['lot_id'],
-                                    notes=notes
+                                    notes=notes,
+                                    session_id=sess_id_for_order,
+                                    destination=dest_label
                                 )
                                 st.toast(f"✅ Raffinage confirmé — bon de transport émis pour Camus68 !")
                                 st.rerun()

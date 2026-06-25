@@ -113,18 +113,66 @@ class UEXManager:
         """Add missing columns to existing tables"""
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
-            # Check if is_hidden column exists in inventory table
+
+            # --- inventory.is_hidden ---
             c.execute("PRAGMA table_info(inventory)")
             columns = [row[1] for row in c.fetchall()]
-
             if 'is_hidden' not in columns:
                 try:
                     c.execute("ALTER TABLE inventory ADD COLUMN is_hidden INTEGER DEFAULT 0")
-                    conn.commit()
                 except Exception:
-                    pass  # Column might already exist
+                    pass
 
-            # Nettoyer le suffixe "(raw)" / "(Raw)" / "(Ore)" dans toutes les tables
+            # --- refinery_jobs.session_id ---
+            c.execute("PRAGMA table_info(refinery_jobs)")
+            cols_rj = [row[1] for row in c.fetchall()]
+            if 'session_id' not in cols_rj:
+                try:
+                    c.execute("ALTER TABLE refinery_jobs ADD COLUMN session_id INTEGER")
+                except Exception:
+                    pass
+
+            # --- transport_orders.session_id + destination ---
+            c.execute("PRAGMA table_info(transport_orders)")
+            cols_to = [row[1] for row in c.fetchall()]
+            if 'session_id' not in cols_to:
+                try:
+                    c.execute("ALTER TABLE transport_orders ADD COLUMN session_id INTEGER")
+                except Exception:
+                    pass
+            if 'destination' not in cols_to:
+                try:
+                    c.execute("ALTER TABLE transport_orders ADD COLUMN destination TEXT DEFAULT 'vente'")
+                except Exception:
+                    pass
+
+            # --- Tables sessions de minage ---
+            c.execute('''CREATE TABLE IF NOT EXISTS mining_sessions
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          numero TEXT UNIQUE,
+                          star_system TEXT NOT NULL,
+                          status TEXT DEFAULT 'open',
+                          date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
+                          created_by TEXT NOT NULL)''')
+
+            c.execute('''CREATE TABLE IF NOT EXISTS session_ships
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          session_id INTEGER NOT NULL,
+                          ship_name TEXT NOT NULL,
+                          ship_role TEXT DEFAULT 'mining')''')
+
+            c.execute('''CREATE TABLE IF NOT EXISTS session_crew
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          ship_id INTEGER NOT NULL,
+                          username TEXT NOT NULL)''')
+
+            c.execute('''CREATE TABLE IF NOT EXISTS session_expenses
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          session_id INTEGER NOT NULL,
+                          description TEXT NOT NULL,
+                          amount_auec REAL NOT NULL)''')
+
+            # --- Nettoyage suffixes "(Raw)" ---
             for table, col in [
                 ("commodity_lots", "commodity_name"),
                 ("commodity_stock", "name"),
@@ -267,17 +315,17 @@ class UEXManager:
     # --- REFINERY JOBS ---
     def create_refinery_job(self, user, commodity_id, commodity_name, terminal_id,
                             terminal_name, method, quantity_raw, quantity_estimated,
-                            yield_rate, confidence, audit_count):
+                            yield_rate, confidence, audit_count, session_id=None):
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""INSERT INTO refinery_jobs
                          (user, commodity_id, commodity_name, terminal_id, terminal_name,
                           method, quantity_raw, quantity_estimated, yield_rate, confidence,
-                          audit_count, status, date_created)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
+                          audit_count, status, date_created, session_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
                       (user, commodity_id, commodity_name, terminal_id, terminal_name,
                        method, quantity_raw, quantity_estimated, yield_rate, confidence,
-                       audit_count, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                       audit_count, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), session_id))
             conn.commit()
             return c.lastrowid
 
@@ -345,16 +393,17 @@ class UEXManager:
 
     def create_transport_order(self, created_by, assigned_to, commodity_name, quantity, quality,
                                pickup_location, delivery_location, refinery_job_id=None,
-                               lot_id=None, notes=None):
+                               lot_id=None, notes=None, session_id=None, destination='vente'):
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""INSERT INTO transport_orders
                          (created_by, assigned_to, commodity_name, quantity, quality,
-                          pickup_location, delivery_location, refinery_job_id, lot_id, notes, date_created)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                          pickup_location, delivery_location, refinery_job_id, lot_id, notes,
+                          date_created, session_id, destination)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                       (created_by, assigned_to, commodity_name, quantity, quality,
                        pickup_location, delivery_location, refinery_job_id, lot_id, notes,
-                       datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                       datetime.now().strftime("%Y-%m-%d %H:%M:%S"), session_id, destination))
             conn.commit()
             return c.lastrowid
 
@@ -382,16 +431,19 @@ class UEXManager:
             elif status == 'delivered':
                 c.execute("UPDATE transport_orders SET status=?, date_delivered=? WHERE id=?",
                           (status, now, order_id))
-                # Libérer le lot et ajouter au stock fédération
-                c.execute("SELECT lot_id, commodity_name FROM transport_orders WHERE id=?", (order_id,))
+                c.execute("SELECT lot_id, commodity_name, destination FROM transport_orders WHERE id=?", (order_id,))
                 row = c.fetchone()
                 if row and row[0]:
-                    c.execute("SELECT commodity_id, quantity FROM commodity_lots WHERE id=?", (row[0],))
+                    lot_id, commodity_name, destination = row
+                    c.execute("SELECT commodity_id, quantity FROM commodity_lots WHERE id=?", (lot_id,))
                     lot = c.fetchone()
                     if lot:
-                        c.execute("UPDATE commodity_lots SET is_blocked=0 WHERE id=?", (row[0],))
+                        c.execute("UPDATE commodity_lots SET is_blocked=0, quantity=0 WHERE id=?", (lot_id,))
                         conn.commit()
-                        self.update_commodity_stock(user, lot[0], row[1], lot[1])
+                        # Vente → lot liquidé, pas de stock fédé
+                        # Stock fédéral → ajout au stock
+                        if destination == 'stock_federal':
+                            self.update_commodity_stock(user, lot[0], commodity_name, lot[1])
                         return
             conn.commit()
 
@@ -508,6 +560,156 @@ class UEXManager:
                 return row[0] == 1 if row else False
         except Exception:
             return False
+
+    # --- SESSIONS DE MINAGE ---
+
+    def create_mining_session(self, created_by, star_system):
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO mining_sessions (star_system, created_by) VALUES (?, ?)",
+                      (star_system, created_by))
+            session_id = c.lastrowid
+            numero = f"MIN{session_id:03d}"
+            c.execute("UPDATE mining_sessions SET numero=? WHERE id=?", (numero, session_id))
+            conn.commit()
+        return {'id': session_id, 'numero': numero}
+
+    def get_mining_sessions(self, status=None):
+        with sqlite3.connect(self.db_path) as conn:
+            query = "SELECT * FROM mining_sessions"
+            params = []
+            if status:
+                query += " WHERE status=?"
+                params.append(status)
+            query += " ORDER BY id DESC"
+            df = pd.read_sql_query(query, conn, params=params)
+        return df
+
+    def get_mining_session(self, session_id):
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("SELECT * FROM mining_sessions WHERE id=?", (session_id,))
+            row = c.fetchone()
+            if not row:
+                return None
+            cols = [d[0] for d in c.description]
+            session = dict(zip(cols, row))
+
+            ships_df = pd.read_sql_query(
+                "SELECT * FROM session_ships WHERE session_id=? ORDER BY id", conn, params=(session_id,))
+            ships = []
+            for _, ship in ships_df.iterrows():
+                crew_df = pd.read_sql_query(
+                    "SELECT * FROM session_crew WHERE ship_id=? ORDER BY id", conn, params=(int(ship['id']),))
+                ships.append({**ship.to_dict(), 'crew': crew_df.to_dict('records')})
+
+            expenses_df = pd.read_sql_query(
+                "SELECT * FROM session_expenses WHERE session_id=? ORDER BY id", conn, params=(session_id,))
+
+            jobs_df = pd.read_sql_query(
+                "SELECT * FROM refinery_jobs WHERE session_id=? ORDER BY date_created", conn, params=(session_id,))
+
+        session['ships'] = ships
+        session['expenses'] = expenses_df.to_dict('records')
+        session['jobs'] = jobs_df.to_dict('records')
+        return session
+
+    def add_session_ship(self, session_id, ship_name, ship_role='mining'):
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO session_ships (session_id, ship_name, ship_role) VALUES (?, ?, ?)",
+                      (session_id, ship_name, ship_role))
+            conn.commit()
+            return c.lastrowid
+
+    def remove_session_ship(self, ship_id):
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("DELETE FROM session_crew WHERE ship_id=?", (ship_id,))
+            c.execute("DELETE FROM session_ships WHERE id=?", (ship_id,))
+            conn.commit()
+
+    def add_crew_member(self, ship_id, username):
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("SELECT id FROM session_crew WHERE ship_id=? AND username=?", (ship_id, username))
+            if not c.fetchone():
+                c.execute("INSERT INTO session_crew (ship_id, username) VALUES (?, ?)", (ship_id, username))
+                conn.commit()
+
+    def remove_crew_member(self, crew_id):
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("DELETE FROM session_crew WHERE id=?", (crew_id,))
+            conn.commit()
+
+    def add_session_expense(self, session_id, description, amount_auec):
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO session_expenses (session_id, description, amount_auec) VALUES (?, ?, ?)",
+                      (session_id, description, amount_auec))
+            conn.commit()
+            return c.lastrowid
+
+    def remove_session_expense(self, expense_id):
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("DELETE FROM session_expenses WHERE id=?", (expense_id,))
+            conn.commit()
+
+    def set_session_status(self, session_id, status):
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("UPDATE mining_sessions SET status=? WHERE id=?", (status, session_id))
+            conn.commit()
+
+    def get_session_financial_summary(self, session_id):
+        """Retourne les données brutes pour le calcul financier — les prix UEX sont injectés par app.py."""
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute("SELECT * FROM mining_sessions WHERE id=?", (session_id,))
+            row = c.fetchone()
+            if not row:
+                return None
+            cols = [d[0] for d in c.description]
+            session = dict(zip(cols, row))
+
+            # Membres présents (vaisseaux de minage uniquement)
+            crew_df = pd.read_sql_query("""
+                SELECT DISTINCT sc.username
+                FROM session_crew sc
+                JOIN session_ships ss ON sc.ship_id = ss.id
+                WHERE ss.session_id = ? AND ss.ship_role = 'mining'
+            """, conn, params=(session_id,))
+
+            # Frais
+            exp_df = pd.read_sql_query(
+                "SELECT description, amount_auec FROM session_expenses WHERE session_id=?",
+                conn, params=(session_id,))
+
+            # Bons de transport de la session
+            orders_df = pd.read_sql_query("""
+                SELECT t.id, t.commodity_name, t.quantity, t.quality, t.destination,
+                       t.status, t.lot_id, cl.commodity_id
+                FROM transport_orders t
+                LEFT JOIN commodity_lots cl ON t.lot_id = cl.id
+                WHERE t.session_id = ?
+            """, conn, params=(session_id,))
+
+        crew = crew_df['username'].tolist() if not crew_df.empty else []
+        total_expenses = float(exp_df['amount_auec'].sum()) if not exp_df.empty else 0.0
+        orders_vente = orders_df[orders_df['destination'] == 'vente'].to_dict('records') if not orders_df.empty else []
+        orders_stock = orders_df[orders_df['destination'] == 'stock_federal'].to_dict('records') if not orders_df.empty else []
+
+        return {
+            'session': session,
+            'crew': crew,
+            'nb_joueurs': len(crew),
+            'expenses': exp_df.to_dict('records') if not exp_df.empty else [],
+            'total_expenses': total_expenses,
+            'orders_vente': orders_vente,
+            'orders_stock_fed': orders_stock,
+        }
 
     # --- AUTHENTICATION ---
     def authenticate_user(self, username, password):
