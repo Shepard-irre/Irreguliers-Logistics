@@ -400,7 +400,6 @@ if selected_page == "🏗️ Raffineries":
             st.warning("Impossible de charger les données UEX.")
         else:
             comm_map_ref = {c['name']: c for c in refinable if c.get('name')}
-            terminal_map = {f"{t['name']} ({t.get('star_system_name', '?')})": t for t in terminals if t.get('name')}
             method_map = {m['name']: m for m in methods}
 
             # Init session state
@@ -412,14 +411,27 @@ if selected_page == "🏗️ Raffineries":
             # --- Session rattachée ---
             open_sessions_df = uex.get_mining_sessions(status='open')
             session_options = {"(aucune)": None}
+            session_systems = {}
             if not open_sessions_df.empty:
                 for _, sr in open_sessions_df.iterrows():
-                    session_options[f"{sr['numero']} — {sr['star_system']}"] = int(sr['id'])
+                    label = f"{sr['numero']} — {sr['star_system']}"
+                    session_options[label] = int(sr['id'])
+                    session_systems[label] = sr['star_system']
             sel_session_label = st.selectbox(
                 "Rattacher à une session de minage :", list(session_options.keys()), key="ref_session")
             sel_session_id = session_options[sel_session_label]
+            sel_session_system = session_systems.get(sel_session_label)
 
             st.divider()
+
+            # Filtrer les terminaux selon le système de la session
+            filtered_terminals = terminals
+            if sel_session_system:
+                filtered_terminals = [t for t in terminals if t.get('star_system_name') == sel_session_system]
+                if not filtered_terminals:
+                    filtered_terminals = terminals
+                st.caption(f"📍 Raffineries filtrées sur **{sel_session_system}**")
+            terminal_map = {f"{t['name']} ({t.get('star_system_name', '?')})": t for t in filtered_terminals if t.get('name')}
 
             # --- Station + Méthode (partagées pour tout le batch) ---
             c1, c2 = st.columns(2)
