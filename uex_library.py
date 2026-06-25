@@ -177,7 +177,7 @@ class UEXManager:
                           description TEXT NOT NULL,
                           amount_auec REAL NOT NULL)''')
 
-            # --- Nettoyage suffixes "(Raw)" ---
+            # --- Nettoyage suffixes "(Raw)" et "(Ore)" ---
             for table, col in [
                 ("commodity_lots", "commodity_name"),
                 ("commodity_stock", "name"),
@@ -188,11 +188,14 @@ class UEXManager:
                     c.execute(f"""UPDATE {table}
                                   SET {col} = TRIM(
                                       REPLACE(REPLACE(REPLACE(REPLACE(
+                                      REPLACE(REPLACE(REPLACE(REPLACE(
                                           {col},
                                           ' (Raw)', ''), '(Raw)', ''),
-                                          ' (raw)', ''), '(raw)', '')
+                                          ' (raw)', ''), '(raw)', ''),
+                                          ' (Ore)', ''), '(Ore)', ''),
+                                          ' (ore)', ''), '(ore)', '')
                                   )
-                                  WHERE LOWER({col}) LIKE '%(raw)%'""")
+                                  WHERE LOWER({col}) LIKE '%(raw)%' OR LOWER({col}) LIKE '%(ore)%'""")
                 except Exception:
                     pass
             conn.commit()
@@ -368,7 +371,7 @@ class UEXManager:
                       (quantity_actual, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), job_id))
             conn.commit()
         # Nettoyer le suffixe "(raw)" / "(Raw)" de l'API UEX pour le nom du lot raffiné
-        clean_name = job['commodity_name'].replace(" (Raw)", "").replace("(Raw)", "").replace(" (raw)", "").replace("(raw)", "").strip()
+        clean_name = job['commodity_name'].replace(" (Raw)", "").replace("(Raw)", "").replace(" (raw)", "").replace("(raw)", "").replace(" (Ore)", "").replace("(Ore)", "").replace(" (ore)", "").replace("(ore)", "").strip()
         lot_id = self.add_commodity_lot(job['commodity_id'], clean_name, quantity_actual, quality, job_id)
         return {'job': job, 'lot_id': lot_id, 'commodity_name': clean_name}
 
