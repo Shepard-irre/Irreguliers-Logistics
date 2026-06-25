@@ -123,12 +123,17 @@ class UEXManager:
                 except Exception:
                     pass
 
-            # --- refinery_jobs.session_id ---
+            # --- refinery_jobs.session_id + quality ---
             c.execute("PRAGMA table_info(refinery_jobs)")
             cols_rj = [row[1] for row in c.fetchall()]
             if 'session_id' not in cols_rj:
                 try:
                     c.execute("ALTER TABLE refinery_jobs ADD COLUMN session_id INTEGER")
+                except Exception:
+                    pass
+            if 'quality' not in cols_rj:
+                try:
+                    c.execute("ALTER TABLE refinery_jobs ADD COLUMN quality INTEGER DEFAULT 500")
                 except Exception:
                     pass
 
@@ -321,17 +326,17 @@ class UEXManager:
     # --- REFINERY JOBS ---
     def create_refinery_job(self, user, commodity_id, commodity_name, terminal_id,
                             terminal_name, method, quantity_raw, quantity_estimated,
-                            yield_rate, confidence, audit_count, session_id=None):
+                            yield_rate, confidence, audit_count, session_id=None, quality=500):
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""INSERT INTO refinery_jobs
                          (user, commodity_id, commodity_name, terminal_id, terminal_name,
                           method, quantity_raw, quantity_estimated, yield_rate, confidence,
-                          audit_count, status, date_created, session_id)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
+                          audit_count, status, date_created, session_id, quality)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)""",
                       (user, commodity_id, commodity_name, terminal_id, terminal_name,
                        method, quantity_raw, quantity_estimated, yield_rate, confidence,
-                       audit_count, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), session_id))
+                       audit_count, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), session_id, quality))
             conn.commit()
             return c.lastrowid
 

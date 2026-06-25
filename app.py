@@ -542,10 +542,9 @@ if selected_page == "🏗️ Raffineries":
                                     est['method'], est['quantity'],
                                     corrected, est['yield_pct'],
                                     est['confidence'], est['audit_count'],
-                                    session_id=sel_session_id
+                                    session_id=sel_session_id,
+                                    quality=quality_final
                                 )
-                                st.session_state['pending_quality'] = st.session_state.get('pending_quality', {})
-                                st.session_state['pending_quality'][est['commodity_id']] = quality_final
                                 st.session_state['refinery_estimates'][i]['saved'] = True
                                 st.toast(f"✅ Lot {est['commodity_name']} enregistré !")
                                 st.rerun()
@@ -562,7 +561,8 @@ if selected_page == "🏗️ Raffineries":
                                 est['method'], est['quantity'],
                                 est['estimated_output'], est['yield_pct'],
                                 est['confidence'], est['audit_count'],
-                                session_id=sel_session_id
+                                session_id=sel_session_id,
+                                quality=est['quality']
                             )
                     st.session_state['refinery_lines'] = []
                     st.session_state['refinery_estimates'] = []
@@ -597,10 +597,10 @@ if selected_page == "🏗️ Raffineries":
                             key=f"actual_{job['id']}"
                         )
                     with col_qual:
-                        default_quality = st.session_state.get('pending_quality', {}).get(int(job['commodity_id']), 500)
+                        stored_quality = int(job['quality']) if pd.notna(job.get('quality')) and job.get('quality') else 500
                         quality = st.number_input(
                             "Qualité du lot (1–1000) :",
-                            min_value=1, max_value=1000, value=default_quality,
+                            min_value=1, max_value=1000, value=stored_quality,
                             key=f"quality_{job['id']}"
                         )
                         ql = "🟢" if quality >= 700 else "🟡" if quality >= 400 else "🔴"
