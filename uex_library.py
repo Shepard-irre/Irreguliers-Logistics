@@ -3,29 +3,42 @@ import os
 import sqlite3
 import pandas as pd
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 from wp_auth import WPAuth
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / '.env', override=True)
 
 _wp_auth = WPAuth() if os.getenv('WP_URL') else None
 
 class UEXManager:
     def __init__(self):
         self.base_url = "https://api.uexcorp.space/2.0"
-        self.headers = {
-            "Authorization": f"Bearer {os.getenv('UEX_BEARER_TOKEN')}",
-            "secret-key": os.getenv('UEX_SECRET_KEY')
-        }
         self.db_path = 'irr_inventory.db'
+        self._cache = {}
 
         self.init_db()
 
+    @property
+    def headers(self):
+        from dotenv import dotenv_values
+        cfg = dotenv_values(Path(__file__).parent / '.env')
+        return {
+            "Authorization": f"Bearer {cfg.get('UEX_BEARER_TOKEN', '')}",
+            "secret-key": cfg.get('UEX_SECRET_KEY', '')
+        }
+
     def _get_data(self, endpoint, params=None):
+        cache_key = (endpoint, str(params))
+        if cache_key in self._cache:
+            return self._cache[cache_key]
         try:
-            response = requests.get(f"{self.base_url}/{endpoint}", headers=self.headers, params=params, timeout=10)
+            response = requests.get(f"{self.base_url}/{endpoint}", headers=self.headers, params=params, timeout=15)
             if response.status_code == 200:
-                return response.json().get('data', [])
+                data = response.json().get('data', [])
+                if data:
+                    self._cache[cache_key] = data
+                return data
             return []
         except Exception:
             return []
@@ -222,6 +235,61 @@ class UEXManager:
         if is_mining is not None:
             data = [v for v in data if v.get('is_mining') == (1 if is_mining else 0)]
         return sorted(data, key=lambda v: v.get('name', ''))
+
+    # --- SCREENSHOT ANALYSIS ---
+    def analyze_refinery_screenshot(self, image_bytes: bytes) -> dict:
+        """Envoie un screenshot de raffinerie SC à Claude Vision et retourne les données extraites."""
+        import base64
+        import anthropic
+
+        api_key = os.getenv('ANTHROPIC_API_KEY')
+        if not api_key:
+            return {'error': 'ANTHROPIC_API_KEY manquante dans .env'}
+
+        b64 = base64.standard_b64encode(image_bytes).decode('utf-8')
+
+        prompt = """Tu analyses un screenshot de l'interface de raffinage du jeu Star Citizen.
+Extrais les informations suivantes et retourne-les en JSON strict (rien d'autre) :
+
+{
+  "terminal_name": "nom de la station/raffinerie (ex: 'Refinery Deck', 'CRU-L1 Ambitious Dream Station')",
+  "method": "méthode de raffinage (Cormack / Dinyx Solventation / Electrostarolysis / Ferron Exchange / Gaskin Process / Kazen Winnowing / Pyrometric Chromalysis / Thermonatic Deposition / XCR Reaction)",
+  "lines": [
+    {
+      "commodity_name": "nom du minerai sans suffixe (ex: 'Quantanium', 'Agricium', 'Bexalite')",
+      "quantity_raw": <nombre SCU brut, entier>,
+      "quality": <qualité en % entre 0 et 100, si visible, sinon null>
+    }
+  ]
+}
+
+Si une info n'est pas visible, mets null. commodity_name doit être le nom anglais du minerai sans '(Raw)' ni '(Ore)'.
+Retourne uniquement le JSON, pas d'explication."""
+
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                    {"type": "text", "text": prompt}
+                ]
+            }]
+        )
+
+        import json
+        raw = response.content[0].text.strip()
+        # Nettoie les balises markdown si Claude en met
+        if raw.startswith('```'):
+            raw = raw.split('```')[1]
+            if raw.startswith('json'):
+                raw = raw[4:]
+        try:
+            return json.loads(raw.strip())
+        except json.JSONDecodeError:
+            return {'error': f'Réponse non parseable : {raw[:200]}'}
 
     # --- REFINERY API ---
     def get_refinable_commodities(self):

@@ -12,9 +12,10 @@ import requests
 import os
 import re
 import jwt as pyjwt
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / '.env', override=True)
 
 # Mapping rôles WP/UM → labels lisibles pour l'UI
 # Généré depuis wp_options (um_role_*_meta) le 28/05/2026

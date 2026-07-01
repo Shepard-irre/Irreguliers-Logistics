@@ -132,11 +132,9 @@ def has_permission(permission):
 # --- CONFIGURATION ---
 STAR_SYSTEMS = ["Stanton", "Pyro", "Nyx"]
 
-@st.cache_data(ttl=3600)
 def fetch_mining_ships():
     return [v['name'] for v in uex.get_vehicles(is_mining=True)]
 
-@st.cache_data(ttl=3600)
 def fetch_all_ships():
     return [v['name'] for v in uex.get_vehicles()]
 
@@ -286,9 +284,13 @@ if selected_page == "🏗️ Raffineries":
                         av1, av2, av3, av4 = st.columns([2, 2, 1, 1])
                         with av1:
                             all_ships_list = fetch_all_ships()
-                            ship_choice = st.selectbox("Vaisseau :", all_ships_list, key=f"ship_sel_{sess_id}")
+                            if all_ships_list:
+                                ship_choice = st.selectbox("Vaisseau :", all_ships_list, key=f"ship_sel_{sess_id}")
+                            else:
+                                ship_choice = None
+                                st.caption("⚠️ Liste UEX indisponible")
                         with av2:
-                            ship_custom = st.text_input("Ou saisir :", key=f"ship_custom_{sess_id}", placeholder="Autre vaisseau")
+                            ship_custom = st.text_input("Nom du vaisseau :", key=f"ship_custom_{sess_id}", placeholder="Ex: Prospector")
                         with av3:
                             ship_role_sel = st.selectbox("Rôle :", ["mining", "escort"], key=f"ship_role_{sess_id}")
                         with av4:
@@ -296,8 +298,11 @@ if selected_page == "🏗️ Raffineries":
                             st.write("")
                             if st.button("➕", key=f"btn_ship_{sess_id}", use_container_width=True):
                                 ship_name = ship_custom.strip() if ship_custom.strip() else ship_choice
-                                uex.add_session_ship(sess_id, ship_name, ship_role_sel)
-                                st.rerun()
+                                if not ship_name:
+                                    st.error("Saisis un nom de vaisseau.")
+                                else:
+                                    uex.add_session_ship(sess_id, ship_name, ship_role_sel)
+                                    st.rerun()
 
                     st.divider()
 
@@ -426,6 +431,53 @@ if selected_page == "🏗️ Raffineries":
                 st.session_state['refinery_lines'] = []
             if 'refinery_estimates' not in st.session_state:
                 st.session_state['refinery_estimates'] = []
+
+            # --- ANALYSE SCREENSHOT ---
+            with st.expander("📸 Importer depuis un screenshot in-game", expanded=False):
+                uploaded = st.file_uploader(
+                    "Screenshot de l'interface raffinerie SC (PNG/JPG)",
+                    type=['png', 'jpg', 'jpeg'],
+                    key="refinery_screenshot"
+                )
+                if uploaded:
+                    st.image(uploaded, use_container_width=True)
+                    if st.button("🔍 Analyser le screenshot", type="primary", use_container_width=True):
+                        with st.spinner("Claude analyse le screenshot…"):
+                            result = uex.analyze_refinery_screenshot(uploaded.getvalue())
+                        if 'error' in result:
+                            st.error(f"Erreur : {result['error']}")
+                        else:
+                            added = 0
+                            # Pré-sélection terminal si trouvé
+                            if result.get('terminal_name'):
+                                st.info(f"📍 Terminal détecté : **{result['terminal_name']}** — sélectionne-le manuellement ci-dessous si besoin.")
+                            if result.get('method'):
+                                st.info(f"⚙️ Méthode détectée : **{result['method']}** — sélectionne-la manuellement ci-dessous si besoin.")
+                            for line in result.get('lines', []):
+                                cname = line.get('commodity_name', '')
+                                qty = line.get('quantity_raw')
+                                quality_pct = line.get('quality')
+                                # Cherche le minerai dans la liste UEX (correspondance partielle)
+                                match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
+                                if match and qty:
+                                    # quality en % → échelle 1-1000
+                                    quality_val = int(quality_pct * 10) if quality_pct else 500
+                                    quality_val = max(1, min(1000, quality_val))
+                                    st.session_state['refinery_lines'].append({
+                                        'commodity_id': comm_map_ref[match]['id'],
+                                        'commodity_name': match,
+                                        'quantity': int(qty),
+                                        'quality': quality_val
+                                    })
+                                    added += 1
+                                else:
+                                    st.warning(f"Minerai non reconnu : **{cname}** — ajoute-le manuellement.")
+                            if added:
+                                st.success(f"✅ {added} lot(s) importé(s) depuis le screenshot !")
+                                st.session_state['refinery_estimates'] = []
+                                st.rerun()
+
+            st.divider()
 
             # --- Session rattachée ---
             open_sessions_df = uex.get_mining_sessions(status='open')
