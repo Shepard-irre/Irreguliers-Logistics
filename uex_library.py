@@ -136,19 +136,21 @@ class UEXManager:
                 except Exception:
                     pass
 
-            # --- refinery_jobs.session_id + quality ---
+            # --- refinery_jobs.session_id + quality + timer ---
             c.execute("PRAGMA table_info(refinery_jobs)")
             cols_rj = [row[1] for row in c.fetchall()]
-            if 'session_id' not in cols_rj:
-                try:
-                    c.execute("ALTER TABLE refinery_jobs ADD COLUMN session_id INTEGER")
-                except Exception:
-                    pass
-            if 'quality' not in cols_rj:
-                try:
-                    c.execute("ALTER TABLE refinery_jobs ADD COLUMN quality INTEGER DEFAULT 500")
-                except Exception:
-                    pass
+            for col, definition in [
+                ('session_id',             'INTEGER'),
+                ('quality',                'INTEGER DEFAULT 500'),
+                ('processing_time_minutes','INTEGER'),
+                ('datetime_completion',    'TEXT'),
+                ('notified',               'INTEGER DEFAULT 0'),
+            ]:
+                if col not in cols_rj:
+                    try:
+                        c.execute(f"ALTER TABLE refinery_jobs ADD COLUMN {col} {definition}")
+                    except Exception:
+                        pass
 
             # --- transport_orders.session_id + destination ---
             c.execute("PRAGMA table_info(transport_orders)")
@@ -242,29 +244,59 @@ class UEXManager:
         import base64
         import anthropic
 
-        api_key = os.getenv('ANTHROPIC_API_KEY')
+        from dotenv import dotenv_values
+        cfg = dotenv_values(Path(__file__).parent / '.env')
+        api_key = cfg.get('ANTHROPIC_API_KEY')
         if not api_key:
             return {'error': 'ANTHROPIC_API_KEY manquante dans .env'}
+
+        # Détection du vrai format image
+        if image_bytes[:3] == b'\xff\xd8\xff':
+            media_type = "image/jpeg"
+        elif image_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+            media_type = "image/png"
+        elif image_bytes[:4] == b'GIF8':
+            media_type = "image/gif"
+        else:
+            media_type = "image/jpeg"
 
         b64 = base64.standard_b64encode(image_bytes).decode('utf-8')
 
         prompt = """Tu analyses un screenshot de l'interface de raffinage du jeu Star Citizen.
-Extrais les informations suivantes et retourne-les en JSON strict (rien d'autre) :
 
+Le nom de la station est affiché en haut à gauche.
+
+ÉTAPE 1 — Identifie le type d'écran :
+- TYPE A : tu vois des ordres avec statut "TERMINÉ" ou "EN COURS / TRAITEMENT EN..." et les colonnes sont NOM | MATÉRIAUX LIVRÉS (CSCU) | QUALITÉ | RENDEMENT
+- TYPE B : tu vois un écran de configuration avec un bouton "CONFIRMER" et un menu de méthode (ex: "Dinyx Solventation"), colonnes : NOM | QUALITÉ | QTE | RENDEM | AFFINER
+
+ÉTAPE 2 — Lis les colonnes dans l'ordre physique gauche→droite :
+
+Pour TYPE A, chaque ligne donne dans l'ordre :
+  [Nom du minerai] [CSCU bruts livrés = quantity_raw] [valeur QUALITÉ = quality] [RENDEMENT]
+  Exemple : "BEXALITE 1500 597 269" → quantity_raw=1500, quality=597
+
+Pour TYPE B, chaque ligne donne dans l'ordre :
+  [Nom du minerai] [valeur QUALITÉ = quality] [QTE = quantity_raw] [RENDEM] [bouton]
+  Exemple : "IRON (ORE) 258 238 -- bouton" → quality=258, quantity_raw=238
+  Autre exemple : "IRON (ORE) 309 330 141 bouton" → quality=309, quantity_raw=330
+
+Retourne ce JSON strict (rien d'autre) :
 {
-  "terminal_name": "nom de la station/raffinerie (ex: 'Refinery Deck', 'CRU-L1 Ambitious Dream Station')",
-  "method": "méthode de raffinage (Cormack / Dinyx Solventation / Electrostarolysis / Ferron Exchange / Gaskin Process / Kazen Winnowing / Pyrometric Chromalysis / Thermonatic Deposition / XCR Reaction)",
+  "screen_type": "A" ou "B",
+  "terminal_name": "nom exact de la station affiché en haut",
+  "method": "méthode si visible (Cormack / Dinyx Solventation / Electrostarolysis / Ferron Exchange / Gaskin Process / Kazen Winnowing / Pyrometric Chromalysis / Thermonatic Deposition / XCR Reaction), sinon null",
+  "processing_time_minutes": <durée totale de traitement en minutes si visible (ex: "8h 49m" → 529, "5h 53m" → 353, "45m" → 45), sinon null>,
   "lines": [
     {
-      "commodity_name": "nom du minerai sans suffixe (ex: 'Quantanium', 'Agricium', 'Bexalite')",
-      "quantity_raw": <nombre SCU brut, entier>,
-      "quality": <qualité en % entre 0 et 100, si visible, sinon null>
+      "commodity_name": "nom EN ANGLAIS sans suffixe (Raw)/(Ore)/(Brut)/(Mined)",
+      "quantity_raw": <SCU bruts — 2ème valeur pour TYPE A, 3ème valeur pour TYPE B>,
+      "quality": <qualité 0-1000 — 3ème valeur pour TYPE A, 2ème valeur pour TYPE B>
     }
   ]
 }
 
-Si une info n'est pas visible, mets null. commodity_name doit être le nom anglais du minerai sans '(Raw)' ni '(Ore)'.
-Retourne uniquement le JSON, pas d'explication."""
+Retourne uniquement le JSON, sans explication."""
 
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
@@ -273,7 +305,7 @@ Retourne uniquement le JSON, pas d'explication."""
             messages=[{
                 "role": "user",
                 "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
                     {"type": "text", "text": prompt}
                 ]
             }]
@@ -397,19 +429,44 @@ Retourne uniquement le JSON, pas d'explication."""
     # --- REFINERY JOBS ---
     def create_refinery_job(self, user, commodity_id, commodity_name, terminal_id,
                             terminal_name, method, quantity_raw, quantity_estimated,
-                            yield_rate, confidence, audit_count, session_id=None, quality=500):
+                            yield_rate, confidence, audit_count, session_id=None, quality=500,
+                            processing_time_minutes=None):
+        from datetime import timedelta
+        now = datetime.now()
+        datetime_completion = None
+        if processing_time_minutes:
+            datetime_completion = (now + timedelta(minutes=processing_time_minutes)).strftime("%Y-%m-%d %H:%M:%S")
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""INSERT INTO refinery_jobs
                          (user, commodity_id, commodity_name, terminal_id, terminal_name,
                           method, quantity_raw, quantity_estimated, yield_rate, confidence,
-                          audit_count, status, date_created, session_id, quality)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)""",
+                          audit_count, status, date_created, session_id, quality,
+                          processing_time_minutes, datetime_completion, notified)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, 0)""",
                       (user, commodity_id, commodity_name, terminal_id, terminal_name,
                        method, quantity_raw, quantity_estimated, yield_rate, confidence,
-                       audit_count, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), session_id, quality))
+                       audit_count, now.strftime("%Y-%m-%d %H:%M:%S"), session_id, quality,
+                       processing_time_minutes, datetime_completion))
             conn.commit()
             return c.lastrowid
+
+    def get_jobs_due_for_notification(self):
+        """Retourne les jobs terminés non encore notifiés."""
+        with sqlite3.connect(self.db_path) as conn:
+            df = pd.read_sql_query(
+                """SELECT * FROM refinery_jobs
+                   WHERE status='pending' AND notified=0
+                   AND datetime_completion IS NOT NULL
+                   AND datetime_completion <= ?""",
+                conn, params=(datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)
+            )
+        return df
+
+    def mark_job_notified(self, job_id):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE refinery_jobs SET notified=1 WHERE id=?", (job_id,))
+            conn.commit()
 
     def get_pending_refinery_jobs(self, user=None):
         with sqlite3.connect(self.db_path) as conn:

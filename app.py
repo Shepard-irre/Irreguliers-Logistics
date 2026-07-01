@@ -431,6 +431,8 @@ if selected_page == "🏗️ Raffineries":
                 st.session_state['refinery_lines'] = []
             if 'refinery_estimates' not in st.session_state:
                 st.session_state['refinery_estimates'] = []
+            if 'processing_time_minutes' not in st.session_state:
+                st.session_state['processing_time_minutes'] = None
 
             # --- ANALYSE SCREENSHOT ---
             with st.expander("📸 Importer depuis un screenshot in-game", expanded=False):
@@ -448,20 +450,41 @@ if selected_page == "🏗️ Raffineries":
                             st.error(f"Erreur : {result['error']}")
                         else:
                             added = 0
-                            # Pré-sélection terminal si trouvé
+                            # Auto-sélection terminal (sur tous les terminaux, sans filtre session)
                             if result.get('terminal_name'):
-                                st.info(f"📍 Terminal détecté : **{result['terminal_name']}** — sélectionne-le manuellement ci-dessous si besoin.")
+                                detected_t = result['terminal_name'].lower()
+                                all_terminal_map = {f"{t['name']} ({t.get('star_system_name', '?')})": t for t in terminals if t.get('name')}
+                                detected_words = [w for w in detected_t.split() if len(w) >= 3]
+                                # Score : nombre de mots du nom détecté présents dans le nom UEX
+                                def terminal_score(k):
+                                    kl = k.lower()
+                                    return sum(1 for w in detected_words if w in kl)
+                                best = max(all_terminal_map.keys(), key=terminal_score, default=None)
+                                if best and terminal_score(best) >= max(1, len(detected_words) // 2):
+                                    st.session_state['ref_terminal'] = best
+                                    st.success(f"📍 Terminal auto-sélectionné : **{best}**")
+                                else:
+                                    st.info(f"📍 Terminal détecté : **{result['terminal_name']}** — introuvable dans UEX, sélectionne manuellement.")
+                            # Auto-sélection méthode
                             if result.get('method'):
-                                st.info(f"⚙️ Méthode détectée : **{result['method']}** — sélectionne-la manuellement ci-dessous si besoin.")
+                                detected_m = result['method'].lower()
+                                all_method_map = {m['name']: m for m in methods}
+                                match_m = next((k for k in all_method_map if detected_m in k.lower() or k.lower() in detected_m), None)
+                                if match_m:
+                                    st.session_state['ref_method'] = match_m
+                                    st.success(f"⚙️ Méthode auto-sélectionnée : **{match_m}**")
                             for line in result.get('lines', []):
                                 cname = line.get('commodity_name', '')
+                                # Strip suffixes résiduels
+                                for suffix in [' (Raw)', ' (Ore)', ' (Brut)', ' (Mined)', '(Raw)', '(Ore)', '(Brut)']:
+                                    cname = cname.replace(suffix, '').strip()
                                 qty = line.get('quantity_raw')
-                                quality_pct = line.get('quality')
+                                quality_raw = line.get('quality')
                                 # Cherche le minerai dans la liste UEX (correspondance partielle)
                                 match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
                                 if match and qty:
-                                    # quality en % → échelle 1-1000
-                                    quality_val = int(quality_pct * 10) if quality_pct else 500
+                                    # quality déjà sur 0-1000 dans le jeu SC
+                                    quality_val = int(quality_raw) if quality_raw else 500
                                     quality_val = max(1, min(1000, quality_val))
                                     st.session_state['refinery_lines'].append({
                                         'commodity_id': comm_map_ref[match]['id'],
@@ -473,6 +496,11 @@ if selected_page == "🏗️ Raffineries":
                                 else:
                                     st.warning(f"Minerai non reconnu : **{cname}** — ajoute-le manuellement.")
                             if added:
+                                pt = result.get('processing_time_minutes')
+                                if pt:
+                                    st.session_state['processing_time_minutes'] = int(pt)
+                                    h, m = divmod(int(pt), 60)
+                                    st.info(f"⏱️ Temps de traitement détecté : **{h}h {m:02d}m** — sera stocké à l'enregistrement.")
                                 st.success(f"✅ {added} lot(s) importé(s) depuis le screenshot !")
                                 st.session_state['refinery_estimates'] = []
                                 st.rerun()
@@ -544,11 +572,14 @@ if selected_page == "🏗️ Raffineries":
                 st.divider()
                 st.write("**Lots à raffiner :**")
                 for i, line in enumerate(st.session_state['refinery_lines']):
-                    ql = "🟢" if line['quality'] >= 700 else "🟡" if line['quality'] >= 400 else "🔴"
                     r1, r2, r3, r4 = st.columns([3, 2, 2, 1])
                     r1.write(f"**{line['commodity_name']}**")
-                    r2.write(f"{line['quantity']} SCU brut")
-                    r3.write(f"{ql} Qualité {line['quality']}/1000")
+                    new_qty = r2.number_input("SCU brut", min_value=1, value=line['quantity'], key=f"edit_qty_{i}", label_visibility="collapsed")
+                    new_qual = r3.number_input("Qualité", min_value=1, max_value=1000, value=line['quality'], key=f"edit_qual_{i}", label_visibility="collapsed")
+                    if new_qty != line['quantity'] or new_qual != line['quality']:
+                        st.session_state['refinery_lines'][i]['quantity'] = new_qty
+                        st.session_state['refinery_lines'][i]['quality'] = new_qual
+                        st.session_state['refinery_estimates'] = []
                     with r4:
                         if st.button("🗑️", key=f"del_line_{i}", use_container_width=True):
                             st.session_state['refinery_lines'].pop(i)
@@ -614,7 +645,8 @@ if selected_page == "🏗️ Raffineries":
                                     corrected, est['yield_pct'],
                                     est['confidence'], est['audit_count'],
                                     session_id=sel_session_id,
-                                    quality=quality_final
+                                    quality=quality_final,
+                                    processing_time_minutes=st.session_state.get('processing_time_minutes')
                                 )
                                 st.session_state['refinery_estimates'][i]['saved'] = True
                                 st.toast(f"✅ Lot {est['commodity_name']} enregistré !")
@@ -633,10 +665,12 @@ if selected_page == "🏗️ Raffineries":
                                 est['estimated_output'], est['yield_pct'],
                                 est['confidence'], est['audit_count'],
                                 session_id=sel_session_id,
-                                quality=est['quality']
+                                quality=est['quality'],
+                                processing_time_minutes=st.session_state.get('processing_time_minutes')
                             )
                     st.session_state['refinery_lines'] = []
                     st.session_state['refinery_estimates'] = []
+                    st.session_state['processing_time_minutes'] = None
                     st.toast("✅ Tous les lots enregistrés !")
                     st.rerun()
 
@@ -651,12 +685,41 @@ if selected_page == "🏗️ Raffineries":
             st.info("Aucun job en attente.")
         else:
             for _, job in pending_df.iterrows():
-                label = f"⛏️ {job['commodity_name']} — {job['quantity_raw']} SCU → ~{job['quantity_estimated']} SCU | {job['user']} | {job['date_created']}"
+                # Calcul countdown
+                timer_str = ""
+                timer_icon = ""
+                dt_comp = job.get('datetime_completion')
+                if dt_comp and str(dt_comp) not in ('', 'nan', 'None'):
+                    from datetime import datetime as dt_cls
+                    try:
+                        comp = dt_cls.strptime(str(dt_comp), "%Y-%m-%d %H:%M:%S")
+                        delta = comp - dt_cls.now()
+                        if delta.total_seconds() > 0:
+                            h, rem = divmod(int(delta.total_seconds()), 3600)
+                            m = rem // 60
+                            timer_str = f" | ⏱️ {h}h {m:02d}m restant"
+                            timer_icon = "⏳ "
+                        else:
+                            timer_str = " | ✅ TERMINÉ"
+                            timer_icon = "✅ "
+                    except Exception:
+                        pass
+                label = f"⛏️ {timer_icon}{job['commodity_name']} — {job['quantity_raw']} SCU → ~{job['quantity_estimated']} SCU | {job['user']} | {job['date_created'][:16]}{timer_str}"
                 with st.expander(label):
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Brut entré", f"{job['quantity_raw']} SCU")
                     col2.metric("Estimé raffiné", f"{job['quantity_estimated']} SCU")
                     col3.metric("Rendement", f"{job['yield_rate']}%")
+                    if dt_comp and str(dt_comp) not in ('', 'nan', 'None'):
+                        try:
+                            comp = dt_cls.strptime(str(dt_comp), "%Y-%m-%d %H:%M:%S")
+                            delta = comp - dt_cls.now()
+                            if delta.total_seconds() > 0:
+                                st.info(f"⏱️ Fin estimée : **{comp.strftime('%d/%m %H:%M')}** (dans {int(delta.total_seconds()//3600)}h {int((delta.total_seconds()%3600)//60):02d}m)")
+                            else:
+                                st.success("✅ Temps de traitement écoulé — job probablement terminé en jeu !")
+                        except Exception:
+                            pass
                     st.caption(f"Station : {job['terminal_name']} | Méthode : {job['method']} | Confiance : {job['confidence']} ({job['audit_count']} audits)")
                     st.divider()
 
