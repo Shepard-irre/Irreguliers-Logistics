@@ -38,20 +38,30 @@ def decode_str(s):
     return ''.join(result)
 
 
-def get_body(msg):
+def get_body_and_attachments(msg, attachments_dir=None):
+    import pathlib, uuid
     body = ''
+    attachments = []
     if msg.is_multipart():
         for part in msg.walk():
             ct = part.get_content_type()
             cd = str(part.get('Content-Disposition', ''))
-            if ct == 'text/plain' and 'attachment' not in cd:
+            fn = part.get_filename()
+            if ct == 'text/plain' and 'attachment' not in cd and not body:
                 charset = part.get_content_charset() or 'utf-8'
                 body = part.get_payload(decode=True).decode(charset, errors='replace')
-                break
+            elif ct.startswith('image/') or fn:
+                payload = part.get_payload(decode=True)
+                if payload and attachments_dir:
+                    ext = pathlib.Path(fn).suffix if fn else ('.' + ct.split('/')[-1])
+                    fname = f"{uuid.uuid4().hex}{ext}"
+                    fpath = pathlib.Path(attachments_dir) / fname
+                    fpath.write_bytes(payload)
+                    attachments.append(str(fpath))
     else:
         charset = msg.get_content_charset() or 'utf-8'
         body = msg.get_payload(decode=True).decode(charset, errors='replace')
-    return body.strip()
+    return body.strip(), attachments
 
 
 def fetch_mails(sender_filter=None, n=10, unread_only=False, folder='INBOX'):
@@ -77,7 +87,9 @@ def fetch_mails(sender_filter=None, n=10, unread_only=False, folder='INBOX'):
         subject = decode_str(msg.get('Subject', '(sans sujet)'))
         sender = decode_str(msg.get('From', ''))
         date_str = msg.get('Date', '')
-        body = get_body(msg)
+        attachments_dir = os.path.join(os.path.dirname(__file__), 'mail_attachments')
+        os.makedirs(attachments_dir, exist_ok=True)
+        body, attachments = get_body_and_attachments(msg, attachments_dir)
 
         # Filtre expéditeur côté Python — plus fiable que le FROM IMAP de Gmail
         if sender_filter and sender_filter.lower() not in sender.lower():
@@ -90,6 +102,7 @@ def fetch_mails(sender_filter=None, n=10, unread_only=False, folder='INBOX'):
             'subject': subject,
             'date': date_str,
             'body': body,
+            'attachments': attachments,
         })
 
         if len(results) >= n:
@@ -116,6 +129,8 @@ def print_mails(mails):
         if len(body) > 1000:
             body = body[:1000] + '\n[... tronqué]'
         print(body)
+        for att in m.get('attachments', []):
+            print(f"  [PJ] {att}")
     print(f"\n{sep}")
     print(f"  {len(mails)} mail(s) affiché(s)")
 

@@ -192,6 +192,13 @@ st.title("🛸 Les Irréguliers - Hub Logistique")
 if selected_page == "🏗️ Raffineries":
     st.header("🏗️ Raffineries")
 
+    _all_terminals = uex.get_all_terminals()
+    # Une entrée par lieu unique (certaines stations ont plusieurs terminaux)
+    _terminal_labels = sorted(set(
+        f"{t['name']} ({t.get('star_system_name', '?')})"
+        for t in _all_terminals if t.get('name')
+    ))
+
     tab_sessions, tab_estim, tab_confirm = st.tabs(["📋 Sessions de minage", "🔬 Nouvelle estimation", "⏳ Jobs en attente"])
 
     # --- ONGLET SESSIONS DE MINAGE ---
@@ -433,13 +440,15 @@ if selected_page == "🏗️ Raffineries":
                 st.session_state['refinery_estimates'] = []
             if 'processing_time_minutes' not in st.session_state:
                 st.session_state['processing_time_minutes'] = None
+            if 'screenshot_key' not in st.session_state:
+                st.session_state['screenshot_key'] = 0
 
             # --- ANALYSE SCREENSHOT ---
             with st.expander("📸 Importer depuis un screenshot in-game", expanded=False):
                 uploaded = st.file_uploader(
                     "Screenshot de l'interface raffinerie SC (PNG/JPG)",
                     type=['png', 'jpg', 'jpeg'],
-                    key="refinery_screenshot"
+                    key=f"refinery_screenshot_{st.session_state['screenshot_key']}"
                 )
                 if uploaded:
                     st.image(uploaded, use_container_width=True)
@@ -480,17 +489,21 @@ if selected_page == "🏗️ Raffineries":
                                     cname = cname.replace(suffix, '').strip()
                                 qty = line.get('quantity_raw')
                                 quality_raw = line.get('quality')
+                                qty_refined = line.get('quantity_refined')
+                                active = line.get('active', True)
+                                if not active:
+                                    continue  # lot rouge = non sélectionné pour raffinage, on ignore
                                 # Cherche le minerai dans la liste UEX (correspondance partielle)
                                 match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
                                 if match and qty:
-                                    # quality déjà sur 0-1000 dans le jeu SC
                                     quality_val = int(quality_raw) if quality_raw else 500
                                     quality_val = max(1, min(1000, quality_val))
                                     st.session_state['refinery_lines'].append({
                                         'commodity_id': comm_map_ref[match]['id'],
                                         'commodity_name': match,
                                         'quantity': int(qty),
-                                        'quality': quality_val
+                                        'quality': quality_val,
+                                        'quantity_refined': float(qty_refined) if qty_refined else None
                                     })
                                     added += 1
                                 else:
@@ -613,21 +626,31 @@ if selected_page == "🏗️ Raffineries":
                 for i, est in enumerate(st.session_state['refinery_estimates']):
                     conf_color = {"Élevée": "✅", "Moyenne": "🟡", "Faible": "🟠"}.get(est['confidence'], "🔴")
                     ql = "🟢" if est['quality'] >= 700 else "🟡" if est['quality'] >= 400 else "🔴"
-                    with st.expander(f"**{est['commodity_name']}** — {est['quantity']} SCU brut | {ql} Qualité {est['quality']} → ~{est['estimated_output']} SCU raffiné", expanded=True):
+                    qty_refined_from_game = est.get('quantity_refined')
+                    display_output = qty_refined_from_game if qty_refined_from_game else est['estimated_output']
+                    game_tag = " 🎮" if qty_refined_from_game else ""
+                    with st.expander(f"**{est['commodity_name']}** — {est['quantity']} SCU brut | {ql} Qualité {est['quality']} → {display_output} SCU raffiné{game_tag}", expanded=True):
                         col1, col2, col3 = st.columns(3)
                         col1.metric("SCU brut", f"{est['quantity']} SCU")
-                        col2.metric("SCU raffiné estimé", f"{est['estimated_output']} SCU")
-                        col3.metric("Rendement", f"{est['yield_pct']}%")
+                        col2.metric("SCU raffiné" + (" 🎮" if qty_refined_from_game else " estimé"), f"{display_output} SCU")
+                        real_yield = round(display_output / est['quantity'] * 100, 1) if est['quantity'] else est['yield_pct']
+                        col3.metric("Rendement", f"{real_yield}%")
                         local_info = f" dont {est.get('local_count', 0)} locaux" if est.get('local_count', 0) > 0 else ""
                         st.caption(f"{conf_color} Confiance : {est['confidence']} ({est['audit_count']} audits{local_info}) | {est['method_display']} | {est['terminal_name']}")
 
+                        # Valeur pré-remplie : rendement jeu si dispo, sinon estimation calculée
+                        default_output = float(qty_refined_from_game) if qty_refined_from_game else float(est['estimated_output'])
+
                         col_corr, col_qual = st.columns(2)
                         with col_corr:
+                            label_corr = "✅ SCU raffiné (depuis le jeu) :" if qty_refined_from_game else "Corriger SCU raffiné :"
                             corrected = st.number_input(
-                                "Corriger SCU raffiné :",
-                                min_value=0.0, value=float(est['estimated_output']), step=0.5,
+                                label_corr,
+                                min_value=0.0, value=default_output, step=0.5,
                                 key=f"corr_{i}"
                             )
+                            if qty_refined_from_game:
+                                st.caption(f"🎮 Valeur extraite du jeu : {qty_refined_from_game} SCU (estimation app : {est['estimated_output']} SCU)")
                         with col_qual:
                             quality_final = st.number_input(
                                 "Corriger qualité :",
@@ -657,12 +680,14 @@ if selected_page == "🏗️ Raffineries":
                 if st.button("✅ Enregistrer tous les lots restants", use_container_width=True):
                     for i, est in enumerate(st.session_state['refinery_estimates']):
                         if not est.get('saved'):
+                            best_output = est.get('quantity_refined') or est['estimated_output']
+                            real_yield = round(best_output / est['quantity'] * 100, 1) if est['quantity'] else est['yield_pct']
                             uex.create_refinery_job(
                                 user['username'],
                                 est['commodity_id'], est['commodity_name'],
                                 est['terminal_id'], est['terminal_name'],
                                 est['method'], est['quantity'],
-                                est['estimated_output'], est['yield_pct'],
+                                best_output, real_yield,
                                 est['confidence'], est['audit_count'],
                                 session_id=sel_session_id,
                                 quality=est['quality'],
@@ -671,6 +696,7 @@ if selected_page == "🏗️ Raffineries":
                     st.session_state['refinery_lines'] = []
                     st.session_state['refinery_estimates'] = []
                     st.session_state['processing_time_minutes'] = None
+                    st.session_state['screenshot_key'] = st.session_state.get('screenshot_key', 0) + 1
                     st.toast("✅ Tous les lots enregistrés !")
                     st.rerun()
 
@@ -744,15 +770,17 @@ if selected_page == "🏗️ Raffineries":
                     default_dest = "stock_federal" if quality >= 750 else "vente"
                     dest_label = st.radio(
                         "Destination :",
-                        ["vente", "stock_federal"],
-                        format_func=lambda x: "💰 Vente" if x == "vente" else "🏛️ Stock Fédéral",
-                        index=0 if default_dest == "vente" else 1,
+                        ["vente", "stock_federal", "personnel"],
+                        format_func=lambda x: {"vente": "💰 Vente", "stock_federal": "🏛️ Stock Fédéral", "personnel": "👤 Personnel"}.get(x, x),
+                        index={"vente": 0, "stock_federal": 1, "personnel": 2}[default_dest] if default_dest in ["vente", "stock_federal", "personnel"] else 0,
                         horizontal=True,
                         key=f"dest_{job['id']}"
                     )
                     if dest_label == "stock_federal":
                         st.caption("🏛️ Qualité ≥ 750 → Stock Fédéral par défaut")
-                    delivery_loc = "Stock Fédération" if dest_label == "stock_federal" else "Marché (à définir)"
+                    elif dest_label == "personnel":
+                        st.caption("👤 Pas de bon de transport — les minerais vont dans ton stock personnel.")
+                    delivery_loc = {"vente": "Marché (à définir)", "stock_federal": "Stock Fédération", "personnel": "Personnel"}.get(dest_label, "Marché")
 
                     # Session associée au job
                     job_session_id = job.get('session_id')
@@ -766,34 +794,97 @@ if selected_page == "🏗️ Raffineries":
                     )
                     notes = st.text_input("Notes (optionnel) :", key=f"notes_{job['id']}")
 
-                    st.info("Un bon de transport sera automatiquement généré pour Camus68.")
+                    if dest_label == "personnel":
+                        default_loc = job['terminal_name'].split(' (')[0] if pd.notna(job.get('terminal_name')) and job.get('terminal_name') else ""
+                        personal_location = st.text_input(
+                            "📍 Localisation des minerais :",
+                            value=default_loc,
+                            placeholder="ex: Aspis Station…",
+                            key=f"pers_loc_{job['id']}"
+                        )
+                    else:
+                        personal_location = None
+                        st.info("Un bon de transport sera automatiquement généré pour Camus68.")
 
                     col_ok, col_ko = st.columns(2)
                     with col_ok:
                         if st.button("✅ Confirmer le raffinage", type="primary", use_container_width=True, key=f"confirm_{job['id']}"):
                             result = uex.confirm_refinery_job(int(job['id']), actual_qty, quality)
                             if result:
-                                sess_id_for_order = int(job_session_id) if (pd.notna(job_session_id) and job_session_id) else None
-                                uex.create_transport_order(
-                                    created_by=user['username'],
-                                    assigned_to='Camus68',
-                                    commodity_name=result['commodity_name'],
-                                    quantity=actual_qty,
-                                    quality=quality,
-                                    pickup_location=pickup_loc,
-                                    delivery_location=delivery_loc,
-                                    refinery_job_id=int(job['id']),
-                                    lot_id=result['lot_id'],
-                                    notes=notes,
-                                    session_id=sess_id_for_order,
-                                    destination=dest_label
-                                )
-                                st.toast(f"✅ Raffinage confirmé — bon de transport émis pour Camus68 !")
+                                if dest_label == "personnel":
+                                    uex.add_personal_stock(
+                                        owner=user['username'],
+                                        commodity_name=result['commodity_name'],
+                                        quantity=actual_qty,
+                                        quality=quality,
+                                        refinery_job_id=int(job['id']),
+                                        location=personal_location or None
+                                    )
+                                    st.toast(f"✅ Raffinage confirmé — {actual_qty} SCU ajoutés à ton stock personnel !")
+                                else:
+                                    sess_id_for_order = int(job_session_id) if (pd.notna(job_session_id) and job_session_id) else None
+                                    uex.create_transport_order(
+                                        created_by=user['username'],
+                                        assigned_to='Camus68',
+                                        commodity_name=result['commodity_name'],
+                                        quantity=actual_qty,
+                                        quality=quality,
+                                        pickup_location=pickup_loc,
+                                        delivery_location=delivery_loc,
+                                        refinery_job_id=int(job['id']),
+                                        lot_id=result['lot_id'],
+                                        notes=notes,
+                                        session_id=sess_id_for_order,
+                                        destination=dest_label
+                                    )
+                                    st.toast(f"✅ Raffinage confirmé — bon de transport émis pour Camus68 !")
                                 st.rerun()
                     with col_ko:
                         if st.button("❌ Annuler", use_container_width=True, key=f"cancel_{job['id']}"):
                             uex.cancel_refinery_job(int(job['id']))
                             st.toast("Job annulé.")
+                            st.rerun()
+
+        # --- Stock personnel du mineur connecté ---
+        st.divider()
+        st.subheader("👤 Mon stock personnel")
+        personal_df = uex.get_personal_stock(user['username'])
+        if personal_df.empty:
+            st.caption("Aucun minerai dans ton stock personnel.")
+        else:
+            for _, row in personal_df.iterrows():
+                stock_id = int(row['id'])
+                qual = int(row['quality']) if pd.notna(row['quality']) else 500
+                color = "🟢" if qual >= 700 else "🟡" if qual >= 400 else "🔴"
+                loc = row['location'] if pd.notna(row.get('location')) and row.get('location') else "—"
+                with st.container(border=True):
+                    h1, h2, h3 = st.columns([3, 1, 1])
+                    h1.write(f"**{row['commodity_name']}**")
+                    h2.write(f"{row['quantity']} SCU")
+                    h3.write(f"{color} {qual}/1000")
+
+                    st.caption(f"📍 **{loc}**")
+
+                    with st.expander("🚀 Transporter vers…"):
+                        dest_station = st.selectbox(
+                            "Nouvelle station :",
+                            _terminal_labels,
+                            key=f"ps_move_{stock_id}"
+                        )
+                        if st.button("✔️ Confirmer le transport", key=f"ps_moveloc_{stock_id}", use_container_width=True):
+                            uex.update_personal_stock_location(stock_id, dest_station.split(' (')[0])
+                            st.toast(f"Minéraux déplacés vers {dest_station.split(' (')[0]}.")
+                            st.rerun()
+
+                    with st.expander("🗑️ Marquer comme consommé"):
+                        consume_reason = st.selectbox(
+                            "Raison :",
+                            ["Vendu", "Détruit", "Perdu", "Donné", "Autre"],
+                            key=f"ps_reason_{stock_id}"
+                        )
+                        if st.button("✔️ Confirmer", key=f"ps_consume_{stock_id}", use_container_width=True):
+                            uex.consume_personal_stock(stock_id, consume_reason)
+                            st.toast(f"Stock marqué '{consume_reason}'.")
                             st.rerun()
 
     st.divider()

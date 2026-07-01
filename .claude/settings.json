@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions",
     "allow": [
       "Bash(git add *)",
       "Bash(git commit *)",
@@ -15,12 +14,26 @@
       "Bash(git tag *)",
       "Bash(wc *)",
       "Bash(rm *)",
+      "Bash(python *)",
       "PowerShell(git *)",
       "PowerShell(C:\\Users\\YannMANCHON\\AppData\\Local\\Programs\\Python\\Python312\\python.exe *)",
       "PowerShell(del *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-ScheduledTask *)",
+      "PowerShell(Get-ScheduledTaskInfo *)",
+      "PowerShell(Start-ScheduledTask *)",
+      "PowerShell(Stop-ScheduledTask *)",
+      "PowerShell(where.exe *)",
+      "PowerShell(wc *)",
+      "PowerShell(Select-String *)",
       "Write",
-      "Edit"
-    ]
+      "Edit",
+      "Bash(gh repo *)",
+      "Bash(git commit -m ' *)"
+    ],
+    "defaultMode": "bypassPermissions"
   },
   "hooks": {
     "PostToolUse": [
@@ -31,12 +44,13 @@
             "type": "command",
             "command": "C:\\Users\\YannMANCHON\\AppData\\Local\\Programs\\Python\\Python312\\python.exe c:\\Irreguliers-Logistics\\notify.py",
             "if": "Bash(git commit *)",
-            "async": true,
+            "timeout": 30,
             "statusMessage": "Notification Darkias...",
-            "timeout": 30
+            "async": true
           }
         ]
       }
     ]
-  }
+  },
+  "skipDangerousModePermissionPrompt": true
 }

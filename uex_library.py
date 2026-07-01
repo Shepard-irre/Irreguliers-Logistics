@@ -192,6 +192,30 @@ class UEXManager:
                           description TEXT NOT NULL,
                           amount_auec REAL NOT NULL)''')
 
+            # --- Stock personnel ---
+            c.execute('''CREATE TABLE IF NOT EXISTS personal_stock
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          owner TEXT NOT NULL,
+                          commodity_name TEXT NOT NULL,
+                          quantity REAL NOT NULL,
+                          quality INTEGER DEFAULT 500,
+                          refinery_job_id INTEGER,
+                          location TEXT,
+                          status TEXT DEFAULT 'active',
+                          consumed_reason TEXT,
+                          consumed_at DATETIME,
+                          date_added DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+            for col, coldef in [
+                ("location",        "TEXT"),
+                ("status",          "TEXT DEFAULT 'active'"),
+                ("consumed_reason", "TEXT"),
+                ("consumed_at",     "DATETIME"),
+            ]:
+                try:
+                    c.execute(f"ALTER TABLE personal_stock ADD COLUMN {col} {coldef}")
+                except Exception:
+                    pass
+
             # --- Nettoyage suffixes "(Raw)" et "(Ore)" ---
             for table, col in [
                 ("commodity_lots", "commodity_name"),
@@ -291,7 +315,9 @@ Retourne ce JSON strict (rien d'autre) :
     {
       "commodity_name": "nom EN ANGLAIS sans suffixe (Raw)/(Ore)/(Brut)/(Mined)",
       "quantity_raw": <SCU bruts — 2ème valeur pour TYPE A, 3ème valeur pour TYPE B>,
-      "quality": <qualité 0-1000 — 3ème valeur pour TYPE A, 2ème valeur pour TYPE B>
+      "quality": <qualité 0-1000 — 3ème valeur pour TYPE A, 2ème valeur pour TYPE B>,
+      "active": <TYPE B : true si la puce AFFINER est ORANGE (lot sélectionné pour raffinage), false si elle est ROUGE (lot non sélectionné). TYPE A : toujours true>,
+      "quantity_refined": <valeur RENDEM si active=true et valeur visible (ex: 141), sinon null>
     }
   ]
 }
@@ -330,6 +356,9 @@ Retourne uniquement le JSON, sans explication."""
 
     def get_refinery_terminals(self):
         return self._get_data("terminals", params={"type": "refinery"})
+
+    def get_all_terminals(self):
+        return self._get_data("terminals") or []
 
     def get_refinery_methods(self):
         # Ratings UEX incorrects sur plusieurs méthodes — on overwrite avec les vraies valeurs in-game
@@ -450,6 +479,35 @@ Retourne uniquement le JSON, sans explication."""
                        processing_time_minutes, datetime_completion))
             conn.commit()
             return c.lastrowid
+
+    def add_personal_stock(self, owner, commodity_name, quantity, quality, refinery_job_id=None, location=None):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""INSERT INTO personal_stock
+                            (owner, commodity_name, quantity, quality, refinery_job_id, location, status, date_added)
+                            VALUES (?, ?, ?, ?, ?, ?, 'active', ?)""",
+                         (owner, commodity_name, quantity, quality, refinery_job_id, location,
+                          datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            conn.commit()
+
+    def get_personal_stock(self, owner):
+        with sqlite3.connect(self.db_path) as conn:
+            return pd.read_sql_query(
+                "SELECT * FROM personal_stock WHERE owner=? AND status='active' ORDER BY date_added DESC",
+                conn, params=(owner,)
+            )
+
+    def consume_personal_stock(self, stock_id, reason):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""UPDATE personal_stock
+                            SET status='consumed', consumed_reason=?, consumed_at=?
+                            WHERE id=?""",
+                         (reason, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), stock_id))
+            conn.commit()
+
+    def update_personal_stock_location(self, stock_id, location):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE personal_stock SET location=? WHERE id=?", (location, stock_id))
+            conn.commit()
 
     def get_jobs_due_for_notification(self):
         """Retourne les jobs terminés non encore notifiés."""
