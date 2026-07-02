@@ -270,9 +270,9 @@ class UEXManager:
 
         from dotenv import dotenv_values
         cfg = dotenv_values(Path(__file__).parent / '.env')
-        api_key = cfg.get('ANTHROPIC_API_KEY')
+        api_key = cfg.get('ANTHROPIC_API_KEY') or os.environ.get('ANTHROPIC_API_KEY')
         if not api_key:
-            return {'error': 'ANTHROPIC_API_KEY manquante dans .env'}
+            return {'error': 'ANTHROPIC_API_KEY manquante dans .env ou secrets Streamlit'}
 
         # Détection du vrai format image
         if image_bytes[:3] == b'\xff\xd8\xff':
