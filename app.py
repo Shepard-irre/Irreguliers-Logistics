@@ -503,16 +503,13 @@ if selected_page == "🏗️ Raffineries":
                                 for line in order_data.get('lines', []):
                                     cname = _strip_suffix(line.get('commodity_name') or line.get('name', ''))
                                     q = line.get('quality')
-                                    # Le jeu affiche QUALITÉ en 0-100 → on convertit en 0-1000
-                                    if q is not None:
-                                        quality_norm = max(1, min(1000, int(q * 10) if q <= 100 else int(q)))
-                                    else:
-                                        quality_norm = 500
+                                    quality_norm = max(1, min(1000, int(q))) if q else 500
                                     built.append({
                                         'commodity_name': cname,
                                         'quality': quality_norm,
-                                        'quantity_raw': line.get('quantity_raw'),
-                                        'quantity_refined': line.get('quantity_refined'),
+                                        'quantity_raw': None,         # non visible sur TYPE A
+                                        'quantity_refined': line.get('quantity_refined'),  # RENDEM en cSCU
+                                        'quantity_done': line.get('quantity_done'),         # TERMIN en cSCU
                                         'active': True
                                     })
                                 return built
@@ -608,12 +605,14 @@ if selected_page == "🏗️ Raffineries":
                             match = next((nm for nm in comm_map_ref if cname.lower() in nm.lower() or nm.lower() in cname.lower()), None)
                             if match:
                                 quality_val = max(1, min(1000, int(quality_raw) if quality_raw else 500))
+                                rendem_cscu = line.get('quantity_refined')  # RENDEM = total raffiné attendu (cSCU)
+                                termin_cscu = line.get('quantity_done')      # TERMIN = déjà produit (cSCU)
                                 st.session_state['refinery_lines'].append({
                                     'commodity_id': comm_map_ref[match]['id'],
                                     'commodity_name': match,
-                                    'quantity': max(1, round(int(qty_raw_val) / 100)) if qty_raw_val else 1,
+                                    'quantity': int(rendem_cscu) if rendem_cscu else 1,
                                     'quality': quality_val,
-                                    'quantity_refined': None
+                                    'quantity_refined': int(termin_cscu) if termin_cscu else None
                                 })
                                 n += 1
                             else:
