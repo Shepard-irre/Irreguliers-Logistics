@@ -457,8 +457,7 @@ if selected_page == "🏗️ Raffineries":
                     if st.button("🔍 Analyser le screenshot", type="primary", use_container_width=True):
                         with st.spinner("Claude analyse le screenshot…"):
                             result = uex.analyze_refinery_screenshot(uploaded.getvalue())
-                        with st.expander("🔍 Debug JSON brut (temporaire)", expanded=True):
-                            st.code(result.get('_raw_response', str(result)), language='json')
+                        st.session_state['_debug_vision'] = result.get('_raw_response', str(result))
                         if 'error' in result:
                             st.error(f"Erreur : {result['error']}")
                         else:
@@ -592,6 +591,10 @@ if selected_page == "🏗️ Raffineries":
                             st.session_state['refinery_estimates'] = []
                             st.success(f"✅ {added} lot(s) importé(s) — renseigne les quantités brutes (non visibles en TYPE A).")
                             st.rerun()
+
+            if st.session_state.get('_debug_vision'):
+                with st.expander("🔍 Debug JSON brut (temporaire)", expanded=True):
+                    st.code(st.session_state['_debug_vision'], language='json')
 
             st.divider()
 
