@@ -292,11 +292,16 @@ class UEXManager:
 - TYPE A : tu vois un ou plusieurs blocs "TRAITEMENT EN COURS" ou "TERMINÉ" côte à côte. Chaque bloc a un numéro "ORDRE DE X" et un "TEMPS RESTANT". Les colonnes de données sont exactement : QUALITÉ | RENDEM | À FAIRE | TERMIN (4 colonnes, pas de colonne quantité brute).
 - TYPE B : tu vois un écran de configuration avec bouton "CONFIRMER" et un menu de méthode (Cormack, Dinyx…). Les colonnes sont : QUALITÉ | QTE | RENDEM | AFFINER.
 
-ÉTAPE 2 — Extrait TOUTES les lignes de TOUS les ordres visibles dans un seul tableau "lines".
+ÉTAPE 2 — Identifie chaque ordre séparément.
 
-Colonnes TYPE A (lis dans cet ordre strict) :
+L'écran peut afficher jusqu'à 3 ordres CÔTE À CÔTE (colonnes distinctes de gauche à droite).
+Chaque ordre est délimité par son propre bloc avec "ORDRE DE X" en haut (X = 1, 2 ou 3) et son propre "TEMPS RESTANT" en bas.
+Lis chaque bloc indépendamment. Tous les minerais d'un même bloc ont le même order_num.
+
+Colonnes TYPE A pour chaque ligne de minerai (lis dans cet ordre strict) :
   [Nom du minerai] → 1er nombre = QUALITÉ → 2ème nombre = RENDEM → 3ème = À FAIRE → 4ème = TERMIN
-  Exemple : "STILERON 330 788 747 41" → commodity_name="Stileron", quality=330, quantity_refined=788
+  Exemple dans l'ordre 1 : "STILERON 330 788 747 41" → order_num=1, commodity_name="Stileron", quality=330, quantity_refined=788
+  Exemple dans l'ordre 2 : "STILERON 330 445 445 0" → order_num=2, commodity_name="Stileron", quality=330, quantity_refined=445
   ⚠️ quantity_raw est TOUJOURS null en TYPE A — ce champ n'existe pas sur cet écran.
   ⚠️ Ne mets JAMAIS la valeur QUALITÉ dans quantity_raw.
 
