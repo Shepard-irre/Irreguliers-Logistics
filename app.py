@@ -619,10 +619,11 @@ if selected_page == "🏗️ Raffineries":
                             match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
                             if match:
                                 quality_val = max(1, min(1000, int(quality_raw) if quality_raw else 500))
+                                qty_raw_val = line.get('quantity_raw')
                                 st.session_state['refinery_lines'].append({
                                     'commodity_id': comm_map_ref[match]['id'],
                                     'commodity_name': match,
-                                    'quantity': 1,
+                                    'quantity': int(qty_raw_val) if qty_raw_val else 1,
                                     'quality': quality_val,
                                     'quantity_refined': float(qty_refined) if qty_refined else None
                                 })
@@ -635,7 +636,7 @@ if selected_page == "🏗️ Raffineries":
                         if added:
                             st.session_state['vision_orders'] = None
                             st.session_state['refinery_estimates'] = []
-                            st.success(f"✅ {added} lot(s) importé(s) — renseigne les quantités brutes (non visibles en TYPE A).")
+                            st.success(f"✅ {added} lot(s) importé(s). Vérifie les quantités et lance l'estimation.")
                             st.rerun()
 
             if st.session_state.get('_debug_vision'):
