@@ -68,14 +68,16 @@ div[data-testid="stError"] { border-left: 4px solid #db1010; background: #db1010
 
 # Cache les appels API pour éviter les requêtes répétées
 @st.cache_resource
-def get_uex_manager():
+def get_uex_manager(_lib_mtime=None):
     return UEXManager()
 
 @st.cache_data(ttl=300)  # Cache 5 minutes
 def fetch_commodities():
     return uex.get_commodities()
 
-uex = get_uex_manager()
+import os as _os
+_lib_mtime = _os.path.getmtime(_os.path.join(_os.path.dirname(__file__), "uex_library.py"))
+uex = get_uex_manager(_lib_mtime=_lib_mtime)
 
 # --- SESSION STATE INITIALIZATION ---
 if "authenticated" not in st.session_state:
