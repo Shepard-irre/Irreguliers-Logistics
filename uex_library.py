@@ -288,40 +288,61 @@ class UEXManager:
 
         prompt = """Tu analyses un screenshot de l'interface de raffinage du jeu Star Citizen.
 
-Le nom de la station est affiché en haut à gauche.
-
 ÉTAPE 1 — Identifie le type d'écran :
-- TYPE A : tu vois des ordres avec statut "TERMINÉ" ou "EN COURS / TRAITEMENT EN..." et les colonnes sont NOM | MATÉRIAUX LIVRÉS (CSCU) | QUALITÉ | RENDEMENT
-- TYPE B : tu vois un écran de configuration avec un bouton "CONFIRMER" et un menu de méthode (ex: "Dinyx Solventation"), colonnes : NOM | QUALITÉ | QTE | RENDEM | AFFINER
+- TYPE A : écran de suivi des ordres en cours ou terminés. Tu vois un ou plusieurs blocs "TRAITEMENT EN COURS" ou "TERMINÉ" côte à côte, chacun avec un numéro "ORDRE DE X". Les colonnes sont : NOM | QUALITÉ | RENDEM | À FAIRE | TERMIN
+- TYPE B : écran de configuration d'un nouvel ordre avec bouton "CONFIRMER" et menu de méthode (ex: Cormack, Dinyx…). Les colonnes sont : NOM | QUALITÉ | QTE | RENDEM | AFFINER
 
-ÉTAPE 2 — Lis les colonnes dans l'ordre physique gauche→droite :
+ÉTAPE 2 — Lis les données :
 
-Pour TYPE A, chaque ligne donne dans l'ordre :
-  [Nom du minerai] [CSCU bruts livrés = quantity_raw] [valeur QUALITÉ = quality] [RENDEMENT]
-  Exemple : "BEXALITE 1500 597 269" → quantity_raw=1500, quality=597
+Pour TYPE A :
+  Il peut y avoir 1, 2 ou 3 ordres affichés côte à côte. Chaque ordre a son propre numéro (ORDRE DE 1, ORDRE DE 2, etc.) et son propre temps restant.
+  Pour chaque ordre, chaque ligne donne dans l'ordre :
+    [Nom du minerai] [QUALITÉ = quality] [RENDEM = rendem_cscu] [À FAIRE] [TERMIN]
+  Exemple : "STILERON 330 788 747 41" → quality=330, rendem_cscu=788
+  IMPORTANT : il n'y a PAS de colonne quantity_raw visible dans cet écran. Mets quantity_raw=null pour toutes les lignes TYPE A.
+  Le temps restant ("TEMPS RESTANT") est propre à chaque ordre.
 
-Pour TYPE B, chaque ligne donne dans l'ordre :
-  [Nom du minerai] [valeur QUALITÉ = quality] [QTE = quantity_raw] [RENDEM] [bouton]
+Pour TYPE B :
+  [Nom du minerai] [QUALITÉ = quality] [QTE = quantity_raw] [RENDEM] [puce AFFINER]
   Exemple : "IRON (ORE) 258 238 -- bouton" → quality=258, quantity_raw=238
-  Autre exemple : "IRON (ORE) 309 330 141 bouton" → quality=309, quantity_raw=330
 
 Retourne ce JSON strict (rien d'autre) :
 {
   "screen_type": "A" ou "B",
-  "terminal_name": "nom exact de la station affiché en haut",
+  "terminal_name": "nom de la station affiché, sinon null",
   "method": "méthode si visible (Cormack / Dinyx Solventation / Electrostarolysis / Ferron Exchange / Gaskin Process / Kazen Winnowing / Pyrometric Chromalysis / Thermonatic Deposition / XCR Reaction), sinon null",
-  "processing_time_minutes": <durée totale de traitement en minutes si visible (ex: "8h 49m" → 529, "5h 53m" → 353, "45m" → 45), sinon null>,
+
+  // Pour TYPE A uniquement : un tableau d'ordres (même s'il n'y en a qu'un)
+  "orders": [
+    {
+      "order_num": <numéro de l'ordre (1, 2, 3…)>,
+      "processing_time_minutes": <durée "TEMPS RESTANT" en minutes (ex: "18h 25m" → 1105, "4h 12m" → 252), sinon null>,
+      "lines": [
+        {
+          "commodity_name": "nom EN ANGLAIS sans suffixe (Raw)/(Ore)/(Brut)/(Mined)",
+          "quality": <valeur QUALITÉ, 1er nombre après le nom>,
+          "quantity_raw": null,
+          "quantity_refined": <valeur RENDEM, 2ème nombre après le nom>
+        }
+      ]
+    }
+  ],
+
+  // Pour TYPE B uniquement : liste plate des lots
+  "processing_time_minutes": <durée totale si visible, sinon null>,
   "lines": [
     {
-      "commodity_name": "nom EN ANGLAIS sans suffixe (Raw)/(Ore)/(Brut)/(Mined)",
-      "quantity_raw": <SCU bruts — 2ème valeur pour TYPE A, 3ème valeur pour TYPE B>,
-      "quality": <qualité 0-1000 — 3ème valeur pour TYPE A, 2ème valeur pour TYPE B>,
-      "active": <TYPE B : true si la puce AFFINER est ORANGE (lot sélectionné pour raffinage), false si elle est ROUGE (lot non sélectionné). TYPE A : toujours true>,
-      "quantity_refined": <valeur RENDEM si active=true et valeur visible (ex: 141), sinon null>
+      "commodity_name": "nom EN ANGLAIS sans suffixe",
+      "quality": <2ème valeur pour TYPE B>,
+      "quantity_raw": <3ème valeur pour TYPE B>,
+      "active": <true si puce AFFINER ORANGE, false si ROUGE>,
+      "quantity_refined": <valeur RENDEM si active=true, sinon null>
     }
   ]
 }
 
+Pour TYPE A : remplis "orders" et laisse "lines" à null.
+Pour TYPE B : remplis "lines" et laisse "orders" à null.
 Retourne uniquement le JSON, sans explication."""
 
         client = anthropic.Anthropic(api_key=api_key)

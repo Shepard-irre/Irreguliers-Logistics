@@ -442,6 +442,8 @@ if selected_page == "🏗️ Raffineries":
                 st.session_state['processing_time_minutes'] = None
             if 'screenshot_key' not in st.session_state:
                 st.session_state['screenshot_key'] = 0
+            if 'vision_orders' not in st.session_state:
+                st.session_state['vision_orders'] = None
 
             # --- ANALYSE SCREENSHOT ---
             with st.expander("📸 Importer depuis un screenshot in-game", expanded=False):
@@ -458,13 +460,11 @@ if selected_page == "🏗️ Raffineries":
                         if 'error' in result:
                             st.error(f"Erreur : {result['error']}")
                         else:
-                            added = 0
-                            # Auto-sélection terminal (sur tous les terminaux, sans filtre session)
+                            # Auto-sélection terminal
                             if result.get('terminal_name'):
                                 detected_t = result['terminal_name'].lower()
                                 all_terminal_map = {f"{t['name']} ({t.get('star_system_name', '?')})": t for t in terminals if t.get('name')}
                                 detected_words = [w for w in detected_t.split() if len(w) >= 3]
-                                # Score : nombre de mots du nom détecté présents dans le nom UEX
                                 def terminal_score(k):
                                     kl = k.lower()
                                     return sum(1 for w in detected_words if w in kl)
@@ -482,41 +482,94 @@ if selected_page == "🏗️ Raffineries":
                                 if match_m:
                                     st.session_state['ref_method'] = match_m
                                     st.success(f"⚙️ Méthode auto-sélectionnée : **{match_m}**")
-                            for line in result.get('lines', []):
-                                cname = line.get('commodity_name', '')
-                                # Strip suffixes résiduels
-                                for suffix in [' (Raw)', ' (Ore)', ' (Brut)', ' (Mined)', '(Raw)', '(Ore)', '(Brut)']:
-                                    cname = cname.replace(suffix, '').strip()
-                                qty = line.get('quantity_raw')
-                                quality_raw = line.get('quality')
-                                qty_refined = line.get('quantity_refined')
-                                active = line.get('active', True)
-                                if not active:
-                                    continue  # lot rouge = non sélectionné pour raffinage, on ignore
-                                # Cherche le minerai dans la liste UEX (correspondance partielle)
-                                match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
-                                if match and qty:
-                                    quality_val = int(quality_raw) if quality_raw else 500
-                                    quality_val = max(1, min(1000, quality_val))
-                                    st.session_state['refinery_lines'].append({
-                                        'commodity_id': comm_map_ref[match]['id'],
-                                        'commodity_name': match,
-                                        'quantity': int(qty),
-                                        'quality': quality_val,
-                                        'quantity_refined': float(qty_refined) if qty_refined else None
-                                    })
-                                    added += 1
-                                else:
-                                    st.warning(f"Minerai non reconnu : **{cname}** — ajoute-le manuellement.")
-                            if added:
-                                pt = result.get('processing_time_minutes')
-                                if pt:
-                                    st.session_state['processing_time_minutes'] = int(pt)
-                                    h, m = divmod(int(pt), 60)
-                                    st.info(f"⏱️ Temps de traitement détecté : **{h}h {m:02d}m** — sera stocké à l'enregistrement.")
-                                st.success(f"✅ {added} lot(s) importé(s) depuis le screenshot !")
+
+                            # TYPE A : plusieurs ordres → stocker pour affichage du sélecteur
+                            if result.get('orders'):
+                                st.session_state['vision_orders'] = result['orders']
                                 st.session_state['refinery_estimates'] = []
-                                st.rerun()
+
+                            # TYPE B : liste plate → import direct
+                            elif result.get('lines'):
+                                added = 0
+                                for line in result['lines']:
+                                    cname = line.get('commodity_name', '')
+                                    for suffix in [' (Raw)', ' (Ore)', ' (Brut)', ' (Mined)', '(Raw)', '(Ore)', '(Brut)']:
+                                        cname = cname.replace(suffix, '').strip()
+                                    qty = line.get('quantity_raw')
+                                    quality_raw = line.get('quality')
+                                    qty_refined = line.get('quantity_refined')
+                                    if not line.get('active', True):
+                                        continue
+                                    match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
+                                    if match and qty:
+                                        quality_val = max(1, min(1000, int(quality_raw) if quality_raw else 500))
+                                        st.session_state['refinery_lines'].append({
+                                            'commodity_id': comm_map_ref[match]['id'],
+                                            'commodity_name': match,
+                                            'quantity': int(qty),
+                                            'quality': quality_val,
+                                            'quantity_refined': float(qty_refined) if qty_refined else None
+                                        })
+                                        added += 1
+                                    else:
+                                        st.warning(f"Minerai non reconnu : **{cname}** — ajoute-le manuellement.")
+                                if added:
+                                    pt = result.get('processing_time_minutes')
+                                    if pt:
+                                        st.session_state['processing_time_minutes'] = int(pt)
+                                        h, m = divmod(int(pt), 60)
+                                        st.info(f"⏱️ Temps de traitement détecté : **{h}h {m:02d}m** — sera stocké à l'enregistrement.")
+                                    st.success(f"✅ {added} lot(s) importé(s) depuis le screenshot !")
+                                    st.session_state['refinery_estimates'] = []
+                                    st.rerun()
+
+                # --- Sélecteur d'ordre TYPE A (affiché hors du bouton, persiste après le clic) ---
+                if st.session_state.get('vision_orders'):
+                    orders = st.session_state['vision_orders']
+                    st.divider()
+                    st.write(f"**{len(orders)} ordre(s) détecté(s) — lequel importer ?**")
+                    order_labels = []
+                    for o in orders:
+                        pt = o.get('processing_time_minutes')
+                        timer_str = f" — ⏱️ {pt//60}h {pt%60:02d}m restant" if pt else ""
+                        minerals = ", ".join(dict.fromkeys(l['commodity_name'] for l in o.get('lines', [])))
+                        order_labels.append(f"Ordre {o['order_num']}{timer_str}  ({minerals})")
+                    sel_idx = st.radio(
+                        "Ordre à importer :",
+                        range(len(orders)),
+                        format_func=lambda i: order_labels[i],
+                        key="vision_order_radio"
+                    )
+                    if st.button("📥 Importer cet ordre", type="primary", use_container_width=True):
+                        selected_order = orders[sel_idx]
+                        added = 0
+                        for line in selected_order.get('lines', []):
+                            cname = line.get('commodity_name', '')
+                            for suffix in [' (Raw)', ' (Ore)', ' (Brut)', ' (Mined)', '(Raw)', '(Ore)', '(Brut)']:
+                                cname = cname.replace(suffix, '').strip()
+                            quality_raw = line.get('quality')
+                            qty_refined = line.get('quantity_refined')
+                            match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
+                            if match:
+                                quality_val = max(1, min(1000, int(quality_raw) if quality_raw else 500))
+                                st.session_state['refinery_lines'].append({
+                                    'commodity_id': comm_map_ref[match]['id'],
+                                    'commodity_name': match,
+                                    'quantity': 1,
+                                    'quality': quality_val,
+                                    'quantity_refined': float(qty_refined) if qty_refined else None
+                                })
+                                added += 1
+                            else:
+                                st.warning(f"Minerai non reconnu : **{cname}** — ajoute-le manuellement.")
+                        pt = selected_order.get('processing_time_minutes')
+                        if pt:
+                            st.session_state['processing_time_minutes'] = int(pt)
+                        if added:
+                            st.session_state['vision_orders'] = None
+                            st.session_state['refinery_estimates'] = []
+                            st.success(f"✅ {added} lot(s) importé(s) — renseigne les quantités brutes (non visibles en TYPE A).")
+                            st.rerun()
 
             st.divider()
 
