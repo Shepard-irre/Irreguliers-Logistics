@@ -595,31 +595,19 @@ if selected_page == "🏗️ Raffineries":
                     orders = st.session_state['vision_orders']
                     st.divider()
                     st.write(f"**{len(orders)} ordre(s) détecté(s) — lequel importer ?**")
-                    order_labels = []
-                    for o in orders:
-                        pt = o.get('processing_time_minutes')
-                        timer_str = f" — ⏱️ {pt//60}h {pt%60:02d}m restant" if pt else ""
-                        minerals = ", ".join(dict.fromkeys(l['commodity_name'] for l in o.get('lines', [])))
-                        order_labels.append(f"Ordre {o['order_num']}{timer_str}  ({minerals})")
-                    sel_idx = st.radio(
-                        "Ordre à importer :",
-                        range(len(orders)),
-                        format_func=lambda i: order_labels[i],
-                        key="vision_order_radio"
-                    )
-                    if st.button("📥 Importer cet ordre", type="primary", use_container_width=True):
-                        selected_order = orders[sel_idx]
-                        added = 0
-                        for line in selected_order.get('lines', []):
+
+                    def _import_order_lines(order_obj):
+                        n = 0
+                        for line in order_obj.get('lines', []):
                             cname = line.get('commodity_name', '')
                             for suffix in [' (Raw)', ' (Ore)', ' (Brut)', ' (Mined)', '(Raw)', '(Ore)', '(Brut)']:
                                 cname = cname.replace(suffix, '').strip()
                             quality_raw = line.get('quality')
                             qty_refined = line.get('quantity_refined')
-                            match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
+                            qty_raw_val = line.get('quantity_raw')
+                            match = next((nm for nm in comm_map_ref if cname.lower() in nm.lower() or nm.lower() in cname.lower()), None)
                             if match:
                                 quality_val = max(1, min(1000, int(quality_raw) if quality_raw else 500))
-                                qty_raw_val = line.get('quantity_raw')
                                 st.session_state['refinery_lines'].append({
                                     'commodity_id': comm_map_ref[match]['id'],
                                     'commodity_name': match,
@@ -627,16 +615,46 @@ if selected_page == "🏗️ Raffineries":
                                     'quality': quality_val,
                                     'quantity_refined': float(qty_refined) if qty_refined else None
                                 })
-                                added += 1
+                                n += 1
                             else:
                                 st.warning(f"Minerai non reconnu : **{cname}** — ajoute-le manuellement.")
+                        return n
+
+                    order_labels = []
+                    for o in orders:
+                        pt = o.get('processing_time_minutes')
+                        timer_str = f" — ⏱️ {pt//60}h {pt%60:02d}m restant" if pt else ""
+                        minerals = ", ".join(dict.fromkeys(l['commodity_name'] for l in o.get('lines', [])))
+                        order_labels.append(f"Ordre {o['order_num']}{timer_str}  ({minerals})")
+
+                    col_radio, col_btn_all = st.columns([3, 1])
+                    with col_radio:
+                        sel_idx = st.radio(
+                            "Ordre à importer :",
+                            range(len(orders)),
+                            format_func=lambda i: order_labels[i],
+                            key="vision_order_radio"
+                        )
+                    with col_btn_all:
+                        st.write("")
+                        if st.button("📥 Tout importer", use_container_width=True):
+                            total = sum(_import_order_lines(o) for o in orders)
+                            st.session_state['vision_orders'] = None
+                            st.session_state['refinery_estimates'] = []
+                            st.success(f"✅ {total} lot(s) importés depuis les {len(orders)} ordres.")
+                            st.rerun()
+
+                    if st.button("📥 Importer cet ordre", type="primary", use_container_width=True):
+                        selected_order = orders[sel_idx]
+                        added = _import_order_lines(selected_order)
                         pt = selected_order.get('processing_time_minutes')
                         if pt:
                             st.session_state['processing_time_minutes'] = int(pt)
                         if added:
-                            st.session_state['vision_orders'] = None
+                            remaining = [o for o in orders if o.get('order_num') != selected_order.get('order_num')]
+                            st.session_state['vision_orders'] = remaining if remaining else None
                             st.session_state['refinery_estimates'] = []
-                            st.success(f"✅ {added} lot(s) importé(s). Vérifie les quantités et lance l'estimation.")
+                            st.success(f"✅ {added} lot(s) importé(s). {len(remaining)} ordre(s) restant(s).")
                             st.rerun()
 
             if st.session_state.get('_debug_vision'):
