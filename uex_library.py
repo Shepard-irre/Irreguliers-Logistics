@@ -348,6 +348,8 @@ Retourne UNIQUEMENT le JSON."""
                 raw = raw[4:]
         try:
             parsed = json.loads(raw.strip())
+            if isinstance(parsed, list):
+                parsed = parsed[0] if parsed else {}
             parsed['_raw_response'] = raw
             return parsed
         except json.JSONDecodeError:
