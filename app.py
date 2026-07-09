@@ -611,9 +611,9 @@ if selected_page == "🏗️ Raffineries":
                                 st.session_state['refinery_lines'].append({
                                     'commodity_id': comm_map_ref[match]['id'],
                                     'commodity_name': match,
-                                    'quantity': int(qty_raw_val) if qty_raw_val else 1,
+                                    'quantity': max(1, round(int(qty_raw_val) / 100)) if qty_raw_val else 1,
                                     'quality': quality_val,
-                                    'quantity_refined': float(qty_refined) if qty_refined else None
+                                    'quantity_refined': None
                                 })
                                 n += 1
                             else:
