@@ -605,14 +605,14 @@ if selected_page == "🏗️ Raffineries":
                             match = next((nm for nm in comm_map_ref if cname.lower() in nm.lower() or nm.lower() in cname.lower()), None)
                             if match:
                                 quality_val = max(1, min(1000, int(quality_raw) if quality_raw else 500))
-                                rendem_cscu = line.get('quantity_refined')  # RENDEM = total raffiné attendu (cSCU)
-                                termin_cscu = line.get('quantity_done')      # TERMIN = déjà produit (cSCU)
+                                termin = line.get('quantity_done')  # TERMIN = SCU raffinés (valeur finale)
+                                termin_val = int(termin) if termin else None
                                 st.session_state['refinery_lines'].append({
                                     'commodity_id': comm_map_ref[match]['id'],
                                     'commodity_name': match,
-                                    'quantity': int(rendem_cscu) if rendem_cscu else 1,
+                                    'quantity': termin_val or 1,  # TERMIN = output connu, pas besoin d'estimer
                                     'quality': quality_val,
-                                    'quantity_refined': int(termin_cscu) if termin_cscu else None
+                                    'quantity_refined': termin_val  # déjà connu → estimation inutile
                                 })
                                 n += 1
                             else:

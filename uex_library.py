@@ -296,15 +296,15 @@ TYPE B : tu vois un bouton "CONFIRMER" et un menu de méthode (Cormack, Dinyx…
 Pour CHAQUE ordre visible (ORDRE DE 1, ORDRE DE 2, ORDRE DE 3…) extrait les lignes du tableau.
 Colonnes du tableau dans l'ordre : [Nom] [QUALITÉ] [RENDEM] [À FAIRE] [TERMIN]
   QUALITÉ = pureté du minerai (entier, échelle 0-1000, ex: 330 = 33.0%)
-  RENDEM  = quantité totale raffinée attendue en cSCU (= À FAIRE + TERMIN)
-  À FAIRE = quantité raffinée restant à produire en cSCU
-  TERMIN  = quantité raffinée déjà produite en cSCU
+  RENDEM  = total raffiné attendu (cSCU) = À FAIRE + TERMIN
+  À FAIRE = raffiné restant à produire (cSCU, diminue au fil du temps)
+  TERMIN  = SCU raffinés déjà produits (valeur finale quand job terminé)
 
 Pour chaque ligne retourne :
   commodity_name   : nom anglais sans suffixe (ex: "Stileron" pas "Stileron (Raw)")
   quality          : valeur QUALITÉ (pureté 0-1000)
   quantity_refined : valeur RENDEM (total raffiné attendu en cSCU)
-  quantity_done    : valeur TERMIN (déjà produit en cSCU)
+  quantity_done    : valeur TERMIN (SCU déjà raffinés — valeur définitive si job terminé)
   active           : true
 processing_time_minutes : temps total RESTANT de l'ordre en minutes (ex: "18h 25m" → 1105)
 
