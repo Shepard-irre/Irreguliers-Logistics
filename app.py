@@ -454,9 +454,19 @@ if selected_page == "🏗️ Raffineries":
                 )
                 if uploaded:
                     st.image(uploaded, use_container_width=True)
+                    order_sel = st.radio(
+                        "Ordre à extraire :",
+                        [0, 1, 2, 3],
+                        format_func=lambda x: {0: "🔍 Auto (1 ordre visible)", 1: "Ordre 1 — colonne gauche", 2: "Ordre 2 — colonne milieu", 3: "Ordre 3 — colonne droite"}[x],
+                        horizontal=True,
+                        key="screenshot_order_sel"
+                    )
                     if st.button("🔍 Analyser le screenshot", type="primary", use_container_width=True):
                         with st.spinner("Claude analyse le screenshot…"):
-                            result = uex.analyze_refinery_screenshot(uploaded.getvalue())
+                            result = uex.analyze_refinery_screenshot(
+                                uploaded.getvalue(),
+                                order_num=order_sel if order_sel > 0 else None
+                            )
                         st.session_state['_debug_vision'] = result.get('_raw_response', str(result))
                         if 'error' in result:
                             st.error(f"Erreur : {result['error']}")
@@ -489,32 +499,41 @@ if selected_page == "🏗️ Raffineries":
                                     cname = cname.replace(s, '').strip()
                                 return cname
 
-                            # TYPE A : orders[].minerals
-                            if result.get('screen_type') == 'A' and result.get('orders'):
-                                orders_built = []
-                                for o in result['orders']:
-                                    lines_built = []
-                                    for m in o.get('minerals', []):
-                                        cname = _strip_suffix(m.get('name', ''))
-                                        lines_built.append({
-                                            'commodity_name': cname,
-                                            'quality': m.get('quality'),
-                                            'quantity_raw': None,
-                                            'quantity_refined': m.get('rendem'),
-                                            'active': True
-                                        })
-                                    orders_built.append({
-                                        'order_num': o.get('num', 1),
-                                        'processing_time_minutes': o.get('timer_minutes'),
-                                        'lines': lines_built
-                                    })
-                                st.session_state['vision_orders'] = orders_built
-                                st.session_state['refinery_estimates'] = []
+                            lines_raw = result.get('lines', [])
+                            is_type_a = result.get('screen_type') == 'A'
 
-                            # TYPE B : lines[].name / quantity_raw
-                            elif result.get('lines'):
+                            if is_type_a and lines_raw:
+                                # TYPE A : le modèle mappe QUALITÉ→quantity_raw et RENDEM→quality — on inverse
+                                lines_built = []
+                                for line in lines_raw:
+                                    cname = _strip_suffix(line.get('commodity_name') or line.get('name', ''))
+                                    true_quality = line.get('quantity_raw')  # modèle met QUALITÉ ici
+                                    true_rendem  = line.get('quality')       # modèle met RENDEM ici
+                                    lines_built.append({
+                                        'commodity_name': cname,
+                                        'quality': true_quality,
+                                        'quantity_raw': None,
+                                        'quantity_refined': true_rendem,
+                                        'active': True
+                                    })
+                                onum = order_sel if order_sel > 0 else 1
+                                order_entry = {
+                                    'order_num': onum,
+                                    'processing_time_minutes': result.get('processing_time_minutes'),
+                                    'lines': lines_built,
+                                    'label': f"Ordre {onum}"
+                                }
+                                existing = [o for o in (st.session_state.get('vision_orders') or []) if o.get('order_num') != onum]
+                                existing.append(order_entry)
+                                existing.sort(key=lambda o: o['order_num'])
+                                st.session_state['vision_orders'] = existing
+                                st.session_state['refinery_estimates'] = []
+                                st.success(f"✅ Ordre {onum} extrait ({len(lines_built)} minerais). Analyse les autres ordres si besoin, puis importe.")
+
+                            # TYPE B
+                            elif lines_raw and not is_type_a:
                                 added = 0
-                                for line in result['lines']:
+                                for line in lines_raw:
                                     cname = _strip_suffix(line.get('name') or line.get('commodity_name', ''))
                                     qty = line.get('quantity_raw')
                                     quality_raw = line.get('quality')
