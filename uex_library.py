@@ -286,54 +286,72 @@ class UEXManager:
 
         b64 = base64.standard_b64encode(image_bytes).decode('utf-8')
 
-        prompt = """Tu analyses un screenshot de l'interface de raffinage du jeu Star Citizen.
+        prompt = """Analyse ce screenshot de l'interface de raffinage de Star Citizen.
 
-ÉTAPE 1 — Identifie le type d'écran :
-- TYPE A : tu vois un ou plusieurs blocs "TRAITEMENT EN COURS" ou "TERMINÉ" côte à côte. Chaque bloc a un numéro "ORDRE DE X" et un "TEMPS RESTANT". Les colonnes de données sont exactement : QUALITÉ | RENDEM | À FAIRE | TERMIN (4 colonnes, pas de colonne quantité brute).
-- TYPE B : tu vois un écran de configuration avec bouton "CONFIRMER" et un menu de méthode (Cormack, Dinyx…). Les colonnes sont : QUALITÉ | QTE | RENDEM | AFFINER.
+=== TYPE D'ÉCRAN ===
+TYPE A : présence de blocs "TRAITEMENT EN COURS" ou "TERMINÉ". Chaque bloc a "ORDRE DE X" en haut et "TEMPS RESTANT" en bas. Il peut y avoir 1, 2 ou 3 blocs CÔTE À CÔTE.
+TYPE B : présence d'un bouton "CONFIRMER" et d'un menu de méthode (Cormack, Dinyx…).
 
-ÉTAPE 2 — Identifie chaque ordre séparément.
+=== TYPE A — INSTRUCTIONS ===
+Compte le nombre de blocs "ORDRE DE X" que tu vois. Chaque bloc est une colonne indépendante.
+Pour chaque bloc, relève séparément :
+  - Son numéro (ORDRE DE 1 → num=1, ORDRE DE 2 → num=2, etc.)
+  - Son "TEMPS RESTANT" en minutes (ex: "18h 25m" → 1105, "4h 12m" → 252)
+  - Chaque ligne de minerai : [Nom] [QUALITÉ] [RENDEM] [À FAIRE] [TERMIN]
+    → quality = 1er nombre, rendem = 2ème nombre
+    → quantity_raw n'existe PAS dans cet écran, toujours null
 
-L'écran peut afficher jusqu'à 3 ordres CÔTE À CÔTE (colonnes distinctes de gauche à droite).
-Chaque ordre est délimité par son propre bloc avec "ORDRE DE X" en haut (X = 1, 2 ou 3) et son propre "TEMPS RESTANT" en bas.
-Lis chaque bloc indépendamment. Tous les minerais d'un même bloc ont le même order_num.
+Exemple bloc "ORDRE DE 1" avec TEMPS RESTANT 18h 25m :
+  STILERON 330 788 747 41  → name="Stileron", quality=330, rendem=788
+  LARANITE 510 276 262 14  → name="Laranite", quality=510, rendem=276
 
-Colonnes TYPE A pour chaque ligne de minerai (lis dans cet ordre strict) :
-  [Nom du minerai] → 1er nombre = QUALITÉ → 2ème nombre = RENDEM → 3ème = À FAIRE → 4ème = TERMIN
-  Exemple dans l'ordre 1 : "STILERON 330 788 747 41" → order_num=1, commodity_name="Stileron", quality=330, quantity_refined=788
-  Exemple dans l'ordre 2 : "STILERON 330 445 445 0" → order_num=2, commodity_name="Stileron", quality=330, quantity_refined=445
-  ⚠️ quantity_raw est TOUJOURS null en TYPE A — ce champ n'existe pas sur cet écran.
-  ⚠️ Ne mets JAMAIS la valeur QUALITÉ dans quantity_raw.
+Exemple bloc "ORDRE DE 2" avec TEMPS RESTANT 17h 23m :
+  STILERON 330 445 445 0   → name="Stileron", quality=330, rendem=445
+  RICCITE  325 2031 2028 3 → name="Riccite",  quality=325, rendem=2031
 
-Colonnes TYPE B :
-  [Nom du minerai] → 1er nombre = QUALITÉ → 2ème nombre = QTE (quantity_raw) → 3ème = RENDEM
-  Exemple : "IRON (ORE) 258 238 141" → quality=258, quantity_raw=238, quantity_refined=141
-
-Retourne ce JSON strict (rien d'autre) :
+=== FORMAT JSON POUR TYPE A ===
 {
-  "screen_type": "A" ou "B",
-  "terminal_name": "nom de la station affiché en haut, sinon null",
-  "method": "méthode si visible (Cormack / Dinyx Solventation / Electrostarolysis / Ferron Exchange / Gaskin Process / Kazen Winnowing / Pyrometric Chromalysis / Thermonatic Deposition / XCR Reaction), sinon null",
-  "processing_time_minutes": <pour TYPE B : durée en minutes si visible, sinon null. Pour TYPE A : null (chaque ordre a son propre timer)>,
-  "lines": [
+  "screen_type": "A",
+  "terminal_name": "nom de la station ou null",
+  "orders": [
     {
-      "order_num": <TYPE A : numéro de l'ordre (1, 2, 3…). TYPE B : toujours 1>,
-      "processing_time_minutes": <TYPE A : "TEMPS RESTANT" de CET ordre en minutes (ex: "18h 25m"→1105). TYPE B : null>,
-      "commodity_name": "nom EN ANGLAIS sans suffixe (Raw)/(Ore)/(Brut)/(Mined)",
-      "quality": <1er nombre après le nom (QUALITÉ)>,
-      "quantity_raw": <TYPE A : toujours null. TYPE B : 2ème nombre (QTE)>,
-      "active": <TYPE B : true si puce AFFINER ORANGE, false si ROUGE. TYPE A : toujours true>,
-      "quantity_refined": <TYPE A : 2ème nombre (RENDEM). TYPE B : 3ème nombre (RENDEM) si active=true, sinon null>
+      "num": 1,
+      "timer_minutes": 1105,
+      "minerals": [
+        {"name": "Stileron", "quality": 330, "rendem": 788},
+        {"name": "Laranite", "quality": 510, "rendem": 276}
+      ]
+    },
+    {
+      "num": 2,
+      "timer_minutes": 1043,
+      "minerals": [
+        {"name": "Stileron", "quality": 330, "rendem": 445}
+      ]
     }
   ]
 }
 
-Retourne uniquement le JSON, sans explication."""
+=== TYPE B — INSTRUCTIONS ===
+Chaque ligne : [Nom] [QUALITÉ] [QTE=quantity_raw] [RENDEM] [puce AFFINER orange=active/rouge=inactive]
+
+=== FORMAT JSON POUR TYPE B ===
+{
+  "screen_type": "B",
+  "terminal_name": "nom de la station ou null",
+  "method": "Cormack ou autre méthode visible, sinon null",
+  "processing_time_minutes": null,
+  "lines": [
+    {"name": "Iron", "quality": 258, "quantity_raw": 238, "rendem": 141, "active": true}
+  ]
+}
+
+Retourne UNIQUEMENT le JSON, sans texte avant ou après."""
 
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
             messages=[{
                 "role": "user",
                 "content": [

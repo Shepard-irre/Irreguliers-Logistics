@@ -483,35 +483,41 @@ if selected_page == "🏗️ Raffineries":
                                     st.session_state['ref_method'] = match_m
                                     st.success(f"⚙️ Méthode auto-sélectionnée : **{match_m}**")
 
-                            # TYPE A : lignes avec order_num → grouper par ordre pour sélecteur
-                            lines_raw = result.get('lines', [])
-                            is_type_a = result.get('screen_type') == 'A'
-                            if is_type_a and lines_raw:
-                                from collections import defaultdict
-                                grouped = defaultdict(list)
-                                order_timers = {}
-                                for line in lines_raw:
-                                    onum = line.get('order_num', 1)
-                                    grouped[onum].append(line)
-                                    if line.get('processing_time_minutes'):
-                                        order_timers[onum] = line['processing_time_minutes']
-                                orders_built = [
-                                    {'order_num': k, 'processing_time_minutes': order_timers.get(k), 'lines': v}
-                                    for k, v in sorted(grouped.items())
-                                ]
+                            def _strip_suffix(cname):
+                                for s in [' (Raw)', ' (Ore)', ' (Brut)', ' (Mined)', '(Raw)', '(Ore)', '(Brut)']:
+                                    cname = cname.replace(s, '').strip()
+                                return cname
+
+                            # TYPE A : orders[].minerals
+                            if result.get('screen_type') == 'A' and result.get('orders'):
+                                orders_built = []
+                                for o in result['orders']:
+                                    lines_built = []
+                                    for m in o.get('minerals', []):
+                                        cname = _strip_suffix(m.get('name', ''))
+                                        lines_built.append({
+                                            'commodity_name': cname,
+                                            'quality': m.get('quality'),
+                                            'quantity_raw': None,
+                                            'quantity_refined': m.get('rendem'),
+                                            'active': True
+                                        })
+                                    orders_built.append({
+                                        'order_num': o.get('num', 1),
+                                        'processing_time_minutes': o.get('timer_minutes'),
+                                        'lines': lines_built
+                                    })
                                 st.session_state['vision_orders'] = orders_built
                                 st.session_state['refinery_estimates'] = []
 
-                            # TYPE B : import direct
-                            elif lines_raw and not is_type_a:
+                            # TYPE B : lines[].name / quantity_raw
+                            elif result.get('lines'):
                                 added = 0
-                                for line in lines_raw:
-                                    cname = line.get('commodity_name', '')
-                                    for suffix in [' (Raw)', ' (Ore)', ' (Brut)', ' (Mined)', '(Raw)', '(Ore)', '(Brut)']:
-                                        cname = cname.replace(suffix, '').strip()
+                                for line in result['lines']:
+                                    cname = _strip_suffix(line.get('name') or line.get('commodity_name', ''))
                                     qty = line.get('quantity_raw')
                                     quality_raw = line.get('quality')
-                                    qty_refined = line.get('quantity_refined')
+                                    qty_refined = line.get('rendem') or line.get('quantity_refined')
                                     if not line.get('active', True):
                                         continue
                                     match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
