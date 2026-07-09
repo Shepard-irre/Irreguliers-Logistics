@@ -456,20 +456,10 @@ if selected_page == "🏗️ Raffineries":
                 )
                 if uploaded:
                     st.image(uploaded, use_container_width=True)
-                    order_sel = st.radio(
-                        "Ordre à extraire :",
-                        [0, 1, 2, 3],
-                        format_func=lambda x: {0: "🔍 Auto (1 ordre visible)", 1: "Ordre 1 — colonne gauche", 2: "Ordre 2 — colonne milieu", 3: "Ordre 3 — colonne droite"}[x],
-                        horizontal=True,
-                        key="screenshot_order_sel"
-                    )
                     if st.button("🔍 Analyser le screenshot", type="primary", use_container_width=True):
                         with st.spinner("Claude analyse le screenshot…"):
                             try:
-                                result = uex.analyze_refinery_screenshot(
-                                    uploaded.getvalue(),
-                                    order_num=int(order_sel) if order_sel and int(order_sel) > 0 else None
-                                )
+                                result = uex.analyze_refinery_screenshot(uploaded.getvalue())
                             except Exception as _e:
                                 st.error(f"Erreur détaillée : {type(_e).__name__}: {_e}")
                                 result = {'error': str(_e)}
@@ -512,13 +502,17 @@ if selected_page == "🏗️ Raffineries":
                                 built = []
                                 for line in order_data.get('lines', []):
                                     cname = _strip_suffix(line.get('commodity_name') or line.get('name', ''))
-                                    true_quality = line.get('quantity_raw')  # modèle mappe QUALITÉ ici
-                                    true_rendem  = line.get('quality')       # modèle mappe RENDEM ici
+                                    q = line.get('quality')
+                                    # Le jeu affiche QUALITÉ en 0-100 → on convertit en 0-1000
+                                    if q is not None:
+                                        quality_norm = max(1, min(1000, int(q * 10) if q <= 100 else int(q)))
+                                    else:
+                                        quality_norm = 500
                                     built.append({
                                         'commodity_name': cname,
-                                        'quality': true_quality,
-                                        'quantity_raw': None,
-                                        'quantity_refined': true_rendem,
+                                        'quality': quality_norm,
+                                        'quantity_raw': line.get('quantity_raw'),
+                                        'quantity_refined': line.get('quantity_refined'),
                                         'active': True
                                     })
                                 return built
@@ -549,7 +543,7 @@ if selected_page == "🏗️ Raffineries":
                             # --- CAS ORDRE UNIQUE TYPE A ---
                             elif first_res.get('screen_type') == 'A' and first_res.get('lines'):
                                 lines_built = _build_type_a_lines(first_res)
-                                onum = int(order_sel) if order_sel and int(order_sel) > 0 else 1
+                                onum = 1
                                 order_entry = {
                                     'order_num': onum,
                                     'processing_time_minutes': first_res.get('processing_time_minutes'),

@@ -263,7 +263,7 @@ class UEXManager:
         return sorted(data, key=lambda v: v.get('name', ''))
 
     # --- SCREENSHOT ANALYSIS ---
-    def analyze_refinery_screenshot(self, image_bytes: bytes, order_num: int = None) -> dict:
+    def analyze_refinery_screenshot(self, image_bytes: bytes) -> dict:
         """Envoie un screenshot de raffinerie SC à Claude Vision et retourne les données extraites."""
         import base64
         import anthropic
@@ -286,45 +286,53 @@ class UEXManager:
 
         b64 = base64.standard_b64encode(image_bytes).decode('utf-8')
 
-        positions = {1: "colonne de GAUCHE", 2: "colonne du MILIEU", 3: "colonne de DROITE"}
-        order_hint = f"\nFocalise-toi UNIQUEMENT sur la {positions[order_num]} (ORDRE DE {order_num}). Ignore les autres colonnes." if order_num else ""
-
         prompt = f"""Analyse ce screenshot de l'interface de raffinage de Star Citizen.
 
 === TYPE D'ÉCRAN ===
-TYPE A : tu vois des blocs "TRAITEMENT EN COURS" ou "TERMINÉ" avec "ORDRE DE X" en haut.
+TYPE A : tu vois un ou plusieurs blocs "TRAITEMENT EN COURS" ou "TERMINÉ" avec "ORDRE DE X".
 TYPE B : tu vois un bouton "CONFIRMER" et un menu de méthode (Cormack, Dinyx…).
 
-=== POUR TYPE A ==={order_hint}
-Extrais les lignes de minerais avec ces colonnes dans l'ordre : [Nom] [QUALITÉ] [RENDEM] [À FAIRE] [TERMIN]
+=== POUR TYPE A ===
+Pour CHAQUE ordre visible (ORDRE DE 1, ORDRE DE 2, ORDRE DE 3…) extrait les lignes du tableau.
+Colonnes du tableau dans l'ordre : [Nom] [QUALITÉ] [RENDEM] [À FAIRE] [TERMIN]
+  QUALITÉ = pureté du minerai (nombre entre 0 et 100)
+  RENDEM  = rendement (pourcentage)
+  À FAIRE = quantité brute restante à traiter (en cSCU, nombre entier)
+  TERMIN  = quantité raffinée déjà produite (en cSCU, nombre entier)
+
 Pour chaque ligne retourne :
-  commodity_name : nom en anglais sans suffixe
-  quantity_raw   : valeur QUALITÉ (1er nombre)
-  quality        : valeur RENDEM (2ème nombre)
-  quantity_refined: valeur TERMIN (4ème nombre)
-  active         : true
-Retourne aussi processing_time_minutes = TEMPS RESTANT en minutes (ex: "18h 25m" → 1105).
+  commodity_name   : nom anglais sans suffixe (ex: "Stileron" pas "Stileron (Raw)")
+  quality          : valeur QUALITÉ (pureté, entre 0 et 100)
+  quantity_raw     : valeur À FAIRE (3ème colonne numérique, quantité brute en cSCU)
+  quantity_refined : valeur TERMIN (4ème colonne numérique)
+  active           : true
+processing_time_minutes : temps total RESTANT de l'ordre en minutes (ex: "18h 25m" → 1105)
 
 === POUR TYPE B ===
 Colonnes : [Nom] [QUALITÉ] [QTE] [RENDEM] [puce AFFINER]
-  commodity_name : nom en anglais sans suffixe
-  quantity_raw   : valeur QTE (2ème nombre)
-  quality        : valeur QUALITÉ (1er nombre)
-  quantity_refined: valeur RENDEM (3ème nombre) si puce orange (active=true), sinon null
+  commodity_name : nom anglais sans suffixe
+  quality        : valeur QUALITÉ (1ère colonne numérique)
+  quantity_raw   : valeur QTE (2ème colonne numérique)
+  quantity_refined: valeur RENDEM (3ème colonne) si puce orange, sinon null
   active         : true si puce AFFINER orange, false si rouge
 
-=== FORMAT JSON (identique TYPE A et TYPE B) ===
+=== FORMAT JSON ===
+Si TYPE B ou un seul ordre TYPE A :
 {{
   "screen_type": "A" ou "B",
   "terminal_name": "nom station ou null",
   "method": "méthode si visible sinon null",
   "processing_time_minutes": <minutes ou null>,
-  "lines": [
-    {{"commodity_name": "...", "quantity_raw": ..., "quality": ..., "active": true, "quantity_refined": ...}}
-  ]
+  "lines": [{{"commodity_name": "...", "quality": ..., "quantity_raw": ..., "quantity_refined": ..., "active": true}}]
 }}
 
-Retourne UNIQUEMENT le JSON."""
+Si plusieurs ordres TYPE A visibles, retourne un ARRAY :
+[
+  {{"screen_type": "A", "processing_time_minutes": ..., "lines": [...]}},
+  {{"screen_type": "A", "processing_time_minutes": ..., "lines": [...]}}
+]
+
+Retourne UNIQUEMENT le JSON, sans texte autour."""
 
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
