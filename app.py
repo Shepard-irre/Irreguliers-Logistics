@@ -483,15 +483,29 @@ if selected_page == "🏗️ Raffineries":
                                     st.session_state['ref_method'] = match_m
                                     st.success(f"⚙️ Méthode auto-sélectionnée : **{match_m}**")
 
-                            # TYPE A : plusieurs ordres → stocker pour affichage du sélecteur
-                            if result.get('orders'):
-                                st.session_state['vision_orders'] = result['orders']
+                            # TYPE A : lignes avec order_num → grouper par ordre pour sélecteur
+                            lines_raw = result.get('lines', [])
+                            is_type_a = result.get('screen_type') == 'A'
+                            if is_type_a and lines_raw:
+                                from collections import defaultdict
+                                grouped = defaultdict(list)
+                                order_timers = {}
+                                for line in lines_raw:
+                                    onum = line.get('order_num', 1)
+                                    grouped[onum].append(line)
+                                    if line.get('processing_time_minutes'):
+                                        order_timers[onum] = line['processing_time_minutes']
+                                orders_built = [
+                                    {'order_num': k, 'processing_time_minutes': order_timers.get(k), 'lines': v}
+                                    for k, v in sorted(grouped.items())
+                                ]
+                                st.session_state['vision_orders'] = orders_built
                                 st.session_state['refinery_estimates'] = []
 
-                            # TYPE B : liste plate → import direct
-                            elif result.get('lines'):
+                            # TYPE B : import direct
+                            elif lines_raw and not is_type_a:
                                 added = 0
-                                for line in result['lines']:
+                                for line in lines_raw:
                                     cname = line.get('commodity_name', '')
                                     for suffix in [' (Raw)', ' (Ore)', ' (Brut)', ' (Mined)', '(Raw)', '(Ore)', '(Brut)']:
                                         cname = cname.replace(suffix, '').strip()
