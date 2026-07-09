@@ -704,7 +704,8 @@ if selected_page == "🏗️ Raffineries":
             with ca:
                 sel_comm_name = st.selectbox("Minerai brut :", sorted(comm_map_ref.keys()), key="ref_comm")
             with cb:
-                line_qty = st.number_input("Quantité (SCU) :", min_value=1, value=100, key="ref_qty")
+                line_qty_cscu = st.number_input("Quantité (cSCU) :", min_value=1, value=10000, step=100, key="ref_qty")
+                line_qty = max(1, line_qty_cscu // 100)
             with cc:
                 line_quality = st.number_input("Qualité (1–1000) :", min_value=1, max_value=1000, value=500, key="ref_quality")
                 ql = "🟢" if line_quality >= 700 else "🟡" if line_quality >= 400 else "🔴"
@@ -729,7 +730,8 @@ if selected_page == "🏗️ Raffineries":
                 for i, line in enumerate(st.session_state['refinery_lines']):
                     r1, r2, r3, r4 = st.columns([3, 2, 2, 1])
                     r1.write(f"**{line['commodity_name']}**")
-                    new_qty = r2.number_input("SCU brut", min_value=1, value=line['quantity'], key=f"edit_qty_{i}", label_visibility="collapsed")
+                    new_qty_cscu = r2.number_input("cSCU brut", min_value=1, value=line['quantity']*100, step=100, key=f"edit_qty_{i}", label_visibility="collapsed")
+                    new_qty = max(1, new_qty_cscu // 100)
                     new_qual = r3.number_input("Qualité", min_value=1, max_value=1000, value=line['quality'], key=f"edit_qual_{i}", label_visibility="collapsed")
                     if new_qty != line['quantity'] or new_qual != line['quality']:
                         st.session_state['refinery_lines'][i]['quantity'] = new_qty
@@ -771,10 +773,10 @@ if selected_page == "🏗️ Raffineries":
                     qty_refined_from_game = est.get('quantity_refined')
                     display_output = qty_refined_from_game if qty_refined_from_game else est['estimated_output']
                     game_tag = " 🎮" if qty_refined_from_game else ""
-                    with st.expander(f"**{est['commodity_name']}** — {est['quantity']} SCU brut | {ql} Qualité {est['quality']} → {display_output} SCU raffiné{game_tag}", expanded=True):
+                    with st.expander(f"**{est['commodity_name']}** — {est['quantity']*100} cSCU brut | {ql} Qualité {est['quality']} → {display_output*100} cSCU raffiné{game_tag}", expanded=True):
                         col1, col2, col3 = st.columns(3)
-                        col1.metric("SCU brut", f"{est['quantity']} SCU")
-                        col2.metric("SCU raffiné" + (" 🎮" if qty_refined_from_game else " estimé"), f"{display_output} SCU")
+                        col1.metric("cSCU brut", f"{est['quantity']*100} cSCU")
+                        col2.metric("cSCU raffiné" + (" 🎮" if qty_refined_from_game else " estimé"), f"{display_output*100} cSCU")
                         real_yield = round(display_output / est['quantity'] * 100, 1) if est['quantity'] else est['yield_pct']
                         col3.metric("Rendement", f"{real_yield}%")
                         local_info = f" dont {est.get('local_count', 0)} locaux" if est.get('local_count', 0) > 0 else ""
@@ -785,14 +787,15 @@ if selected_page == "🏗️ Raffineries":
 
                         col_corr, col_qual = st.columns(2)
                         with col_corr:
-                            label_corr = "✅ SCU raffiné (depuis le jeu) :" if qty_refined_from_game else "Corriger SCU raffiné :"
-                            corrected = st.number_input(
+                            label_corr = "✅ cSCU raffiné (depuis le jeu) :" if qty_refined_from_game else "Corriger cSCU raffiné :"
+                            corrected_cscu = st.number_input(
                                 label_corr,
-                                min_value=0.0, value=default_output, step=0.5,
+                                min_value=0.0, value=default_output*100, step=50.0,
                                 key=f"corr_{i}"
                             )
+                            corrected = corrected_cscu / 100
                             if qty_refined_from_game:
-                                st.caption(f"🎮 Valeur extraite du jeu : {qty_refined_from_game} SCU (estimation app : {est['estimated_output']} SCU)")
+                                st.caption(f"🎮 Valeur extraite du jeu : {qty_refined_from_game*100} cSCU (estimation app : {est['estimated_output']*100} cSCU)")
                         with col_qual:
                             quality_final = st.number_input(
                                 "Corriger qualité :",
@@ -872,11 +875,11 @@ if selected_page == "🏗️ Raffineries":
                             timer_icon = "✅ "
                     except Exception:
                         pass
-                label = f"⛏️ {timer_icon}{job['commodity_name']} — {job['quantity_raw']} SCU → ~{job['quantity_estimated']} SCU | {job['user']} | {job['date_created'][:16]}{timer_str}"
+                label = f"⛏️ {timer_icon}{job['commodity_name']} — {job['quantity_raw']*100} cSCU → ~{job['quantity_estimated']*100} cSCU | {job['user']} | {job['date_created'][:16]}{timer_str}"
                 with st.expander(label):
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Brut entré", f"{job['quantity_raw']} SCU")
-                    col2.metric("Estimé raffiné", f"{job['quantity_estimated']} SCU")
+                    col1.metric("Brut entré", f"{job['quantity_raw']*100} cSCU")
+                    col2.metric("Estimé raffiné", f"{job['quantity_estimated']*100} cSCU")
                     col3.metric("Rendement", f"{job['yield_rate']}%")
                     if dt_comp and str(dt_comp) not in ('', 'nan', 'None'):
                         try:
