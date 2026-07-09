@@ -463,10 +463,14 @@ if selected_page == "🏗️ Raffineries":
                     )
                     if st.button("🔍 Analyser le screenshot", type="primary", use_container_width=True):
                         with st.spinner("Claude analyse le screenshot…"):
-                            result = uex.analyze_refinery_screenshot(
-                                uploaded.getvalue(),
-                                order_num=order_sel if (order_sel or 0) > 0 else None
-                            )
+                            try:
+                                result = uex.analyze_refinery_screenshot(
+                                    uploaded.getvalue(),
+                                    order_num=int(order_sel) if order_sel and int(order_sel) > 0 else None
+                                )
+                            except Exception as _e:
+                                st.error(f"Erreur détaillée : {type(_e).__name__}: {_e}")
+                                result = {'error': str(_e)}
                         st.session_state['_debug_vision'] = result.get('_raw_response', str(result))
                         if 'error' in result:
                             st.error(f"Erreur : {result['error']}")
