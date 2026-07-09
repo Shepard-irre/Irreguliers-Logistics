@@ -465,7 +465,7 @@ if selected_page == "🏗️ Raffineries":
                         with st.spinner("Claude analyse le screenshot…"):
                             result = uex.analyze_refinery_screenshot(
                                 uploaded.getvalue(),
-                                order_num=order_sel if order_sel > 0 else None
+                                order_num=order_sel if (order_sel or 0) > 0 else None
                             )
                         st.session_state['_debug_vision'] = result.get('_raw_response', str(result))
                         if 'error' in result:
@@ -516,7 +516,7 @@ if selected_page == "🏗️ Raffineries":
                                         'quantity_refined': true_rendem,
                                         'active': True
                                     })
-                                onum = order_sel if order_sel > 0 else 1
+                                onum = order_sel if (order_sel or 0) > 0 else 1
                                 order_entry = {
                                     'order_num': onum,
                                     'processing_time_minutes': result.get('processing_time_minutes'),
