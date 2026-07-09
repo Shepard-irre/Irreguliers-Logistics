@@ -457,6 +457,8 @@ if selected_page == "🏗️ Raffineries":
                     if st.button("🔍 Analyser le screenshot", type="primary", use_container_width=True):
                         with st.spinner("Claude analyse le screenshot…"):
                             result = uex.analyze_refinery_screenshot(uploaded.getvalue())
+                        with st.expander("🔍 Debug JSON brut (temporaire)", expanded=True):
+                            st.code(result.get('_raw_response', str(result)), language='json')
                         if 'error' in result:
                             st.error(f"Erreur : {result['error']}")
                         else:

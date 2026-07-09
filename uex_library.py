@@ -369,7 +369,9 @@ Retourne UNIQUEMENT le JSON, sans texte avant ou après."""
             if raw.startswith('json'):
                 raw = raw[4:]
         try:
-            return json.loads(raw.strip())
+            parsed = json.loads(raw.strip())
+            parsed['_raw_response'] = raw  # debug temporaire
+            return parsed
         except json.JSONDecodeError:
             return {'error': f'Réponse non parseable : {raw[:200]}'}
 
