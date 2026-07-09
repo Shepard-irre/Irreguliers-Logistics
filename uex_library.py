@@ -349,7 +349,7 @@ Retourne UNIQUEMENT le JSON."""
         try:
             parsed = json.loads(raw.strip())
             if isinstance(parsed, list):
-                parsed = parsed[0] if parsed else {}
+                return {'orders': parsed, '_raw_response': raw}
             parsed['_raw_response'] = raw
             return parsed
         except json.JSONDecodeError:

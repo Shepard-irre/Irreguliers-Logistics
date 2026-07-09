@@ -477,9 +477,12 @@ if selected_page == "🏗️ Raffineries":
                         if 'error' in result:
                             st.error(f"Erreur : {result['error']}")
                         else:
+                            # Pour terminal/méthode : utilise le premier ordre si réponse multi
+                            first_res = (result.get('orders') or [result])[0]
+
                             # Auto-sélection terminal
-                            if result.get('terminal_name'):
-                                detected_t = result['terminal_name'].lower()
+                            if first_res.get('terminal_name'):
+                                detected_t = first_res['terminal_name'].lower()
                                 all_terminal_map = {f"{t['name']} ({t.get('star_system_name', '?')})": t for t in terminals if t.get('name')}
                                 detected_words = [w for w in detected_t.split() if len(w) >= 3]
                                 def terminal_score(k):
@@ -490,10 +493,10 @@ if selected_page == "🏗️ Raffineries":
                                     st.session_state['ref_terminal'] = best
                                     st.success(f"📍 Terminal auto-sélectionné : **{best}**")
                                 else:
-                                    st.info(f"📍 Terminal détecté : **{result['terminal_name']}** — introuvable dans UEX, sélectionne manuellement.")
+                                    st.info(f"📍 Terminal détecté : **{first_res['terminal_name']}** — introuvable dans UEX, sélectionne manuellement.")
                             # Auto-sélection méthode
-                            if result.get('method'):
-                                detected_m = result['method'].lower()
+                            if first_res.get('method'):
+                                detected_m = first_res['method'].lower()
                                 all_method_map = {m['name']: m for m in methods}
                                 match_m = next((k for k in all_method_map if detected_m in k.lower() or k.lower() in detected_m), None)
                                 if match_m:
@@ -505,27 +508,51 @@ if selected_page == "🏗️ Raffineries":
                                     cname = cname.replace(s, '').strip()
                                 return cname
 
-                            lines_raw = result.get('lines', [])
-                            is_type_a = result.get('screen_type') == 'A'
-
-                            if is_type_a and lines_raw:
-                                # TYPE A : le modèle mappe QUALITÉ→quantity_raw et RENDEM→quality — on inverse
-                                lines_built = []
-                                for line in lines_raw:
+                            def _build_type_a_lines(order_data):
+                                built = []
+                                for line in order_data.get('lines', []):
                                     cname = _strip_suffix(line.get('commodity_name') or line.get('name', ''))
-                                    true_quality = line.get('quantity_raw')  # modèle met QUALITÉ ici
-                                    true_rendem  = line.get('quality')       # modèle met RENDEM ici
-                                    lines_built.append({
+                                    true_quality = line.get('quantity_raw')  # modèle mappe QUALITÉ ici
+                                    true_rendem  = line.get('quality')       # modèle mappe RENDEM ici
+                                    built.append({
                                         'commodity_name': cname,
                                         'quality': true_quality,
                                         'quantity_raw': None,
                                         'quantity_refined': true_rendem,
                                         'active': True
                                     })
-                                onum = order_sel if (order_sel or 0) > 0 else 1
+                                return built
+
+                            # --- CAS MULTI-ORDRES (Claude a renvoyé un array) ---
+                            if result.get('orders'):
+                                orders_list = result['orders']
+                                for i, order_data in enumerate(orders_list):
+                                    onum = i + 1
+                                    if order_data.get('screen_type') == 'A':
+                                        lines_built = _build_type_a_lines(order_data)
+                                        if lines_built:
+                                            order_entry = {
+                                                'order_num': onum,
+                                                'processing_time_minutes': order_data.get('processing_time_minutes'),
+                                                'lines': lines_built,
+                                                'label': f"Ordre {onum}"
+                                            }
+                                            existing = [o for o in (st.session_state.get('vision_orders') or []) if o.get('order_num') != onum]
+                                            existing.append(order_entry)
+                                            st.session_state['vision_orders'] = existing
+                                if st.session_state.get('vision_orders'):
+                                    st.session_state['vision_orders'].sort(key=lambda o: o['order_num'])
+                                st.session_state['refinery_estimates'] = []
+                                n = len(st.session_state.get('vision_orders', []))
+                                st.success(f"✅ {n} ordre(s) extraits depuis le screenshot. Importe-les ci-dessous.")
+
+                            # --- CAS ORDRE UNIQUE TYPE A ---
+                            elif first_res.get('screen_type') == 'A' and first_res.get('lines'):
+                                lines_built = _build_type_a_lines(first_res)
+                                onum = int(order_sel) if order_sel and int(order_sel) > 0 else 1
                                 order_entry = {
                                     'order_num': onum,
-                                    'processing_time_minutes': result.get('processing_time_minutes'),
+                                    'processing_time_minutes': first_res.get('processing_time_minutes'),
                                     'lines': lines_built,
                                     'label': f"Ordre {onum}"
                                 }
@@ -536,10 +563,10 @@ if selected_page == "🏗️ Raffineries":
                                 st.session_state['refinery_estimates'] = []
                                 st.success(f"✅ Ordre {onum} extrait ({len(lines_built)} minerais). Analyse les autres ordres si besoin, puis importe.")
 
-                            # TYPE B
-                            elif lines_raw and not is_type_a:
+                            # TYPE B (configuration d'un nouvel ordre)
+                            elif first_res.get('screen_type') == 'B' and first_res.get('lines'):
                                 added = 0
-                                for line in lines_raw:
+                                for line in first_res['lines']:
                                     cname = _strip_suffix(line.get('name') or line.get('commodity_name', ''))
                                     qty = line.get('quantity_raw')
                                     quality_raw = line.get('quality')
@@ -560,7 +587,7 @@ if selected_page == "🏗️ Raffineries":
                                     else:
                                         st.warning(f"Minerai non reconnu : **{cname}** — ajoute-le manuellement.")
                                 if added:
-                                    pt = result.get('processing_time_minutes')
+                                    pt = first_res.get('processing_time_minutes')
                                     if pt:
                                         st.session_state['processing_time_minutes'] = int(pt)
                                         h, m = divmod(int(pt), 60)
