@@ -567,12 +567,13 @@ if selected_page == "🏗️ Raffineries":
                                     match = next((n for n in comm_map_ref if cname.lower() in n.lower() or n.lower() in cname.lower()), None)
                                     if match and qty:
                                         quality_val = max(1, min(1000, int(quality_raw) if quality_raw else 500))
+                                        # QTÉ et RENDEM du jeu sont en cSCU → /100 pour stockage interne en SCU
                                         st.session_state['refinery_lines'].append({
                                             'commodity_id': comm_map_ref[match]['id'],
                                             'commodity_name': match,
-                                            'quantity': int(qty),
+                                            'quantity': float(qty) / 100,
                                             'quality': quality_val,
-                                            'quantity_refined': float(qty_refined) if qty_refined else None
+                                            'quantity_refined': float(qty_refined) / 100 if qty_refined else None
                                         })
                                         added += 1
                                     else:
@@ -605,14 +606,16 @@ if selected_page == "🏗️ Raffineries":
                             match = next((nm for nm in comm_map_ref if cname.lower() in nm.lower() or nm.lower() in cname.lower()), None)
                             if match:
                                 quality_val = max(1, min(1000, int(quality_raw) if quality_raw else 500))
-                                termin = line.get('quantity_done')  # TERMIN = SCU raffinés (valeur finale)
-                                termin_val = int(termin) if termin else None
+                                rendem_cscu = line.get('quantity_refined')  # RENDEM = À FAIRE + TERMIN = total attendu (cSCU)
+                                # RENDEM est toujours fiable — TERMIN=0 si job vient de démarrer
+                                # Conversion cSCU → SCU (/100) pour cohérence avec le stockage interne
+                                output_scu = float(rendem_cscu) / 100 if rendem_cscu else None
                                 st.session_state['refinery_lines'].append({
                                     'commodity_id': comm_map_ref[match]['id'],
                                     'commodity_name': match,
-                                    'quantity': termin_val or 1,  # TERMIN = output connu, pas besoin d'estimer
+                                    'quantity': output_scu or 0.01,
                                     'quality': quality_val,
-                                    'quantity_refined': termin_val  # déjà connu → estimation inutile
+                                    'quantity_refined': output_scu  # déjà connu → estimation inutile
                                 })
                                 n += 1
                             else:
