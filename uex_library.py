@@ -39,8 +39,10 @@ class UEXManager:
                 if data:
                     self._cache[cache_key] = data
                 return data
+            print(f"[uex_library] {endpoint} -> HTTP {response.status_code}: {response.text[:300]}")
             return []
-        except Exception:
+        except Exception as e:
+            print(f"[uex_library] {endpoint} -> {type(e).__name__}: {e}")
             return []
 
     # --- API ACCESS ---
