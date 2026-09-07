@@ -47,13 +47,13 @@ npm run dev
 
 ### Déploiement (test en ligne)
 
-`render.yaml` à la racine décrit un Blueprint Render avec 2 services :
-- `irreguliers-logistics-api` — web service Python, `pip install -r requirements.txt` puis `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
-- `irreguliers-logistics-app` — static site, `cd frontend && npm ci && npm run build`, publie `frontend/dist`
+**Frontend** : `render.yaml` décrit un service Render static site `irreguliers-logistics-app` (`cd frontend && npm ci && npm run build`, publie `frontend/dist`). Fonctionne bien, reste sur Render.
 
-**Piège** : `uex_library.py` lit certaines clés via `dotenv_values(<racine>/.env)` directement (pas `os.environ`), donc les env vars classiques du dashboard Render ne suffisent pas pour `UEX_BEARER_TOKEN`/`UEX_SECRET_KEY`. Solution : ajouter un **Secret File** nommé `.env` (chemin `.env`, racine du repo) sur le service `irreguliers-logistics-api` avec le même contenu que le `.env` local (`WP_URL`, `UEX_BEARER_TOKEN`, `UEX_SECRET_KEY`, `ANTHROPIC_API_KEY`, `APP_JWT_SECRET`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `NOTIFY_EMAIL`). Ce fichier satisfait à la fois `dotenv_values()` et les `load_dotenv()` classiques.
+**Backend** : d'abord tenté sur Render (`irreguliers-logistics-api` dans `render.yaml`), abandonné — l'IP de sortie de Render se fait bloquer par le challenge JS Cloudflare d'`api.uexcorp.space` (HTTP 403 "Just a moment..." sur `commodities`/`terminals`/`refineries_methods`, testé avec et sans `User-Agent` navigateur, sans succès). Bascule sur **Railway** (`railway.json` à la racine : Nixpacks, `pip install -r requirements.txt`, start `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`). Si Railway est un jour flagué à son tour, c'est un problème d'IP de sortie de l'hébergeur, pas de code — changer d'hébergeur backend est la seule vraie option (avec potentiellement `render.yaml` à réactiver un jour si Render change de plage IP).
 
-**Limite connue** : `irr_inventory.db` (SQLite) n'est pas versionné (`.gitignore`) et le disque Render free n'est pas persistant entre déploiements — la base repart à vide à chaque redeploy du service API. Suffisant pour un test fonctionnel, pas pour de la donnée durable (même limite déjà existante sur Streamlit Cloud).
+**Piège résolu** : `uex_library.py.headers` lisait `UEX_BEARER_TOKEN`/`UEX_SECRET_KEY` via `dotenv_values(<racine>/.env)` — un parsing direct du fichier disque, ignorant `os.environ`. Sans fichier `.env` réel sur l'hébergeur (gitignored), les env vars classiques du dashboard ne suffisaient pas. Remplacé par `os.getenv(...)` (commit `1875841`+ suivant) — fonctionne avec de simples Environment Variables sur n'importe quel hébergeur (Render, Railway, Streamlit Cloud qui expose aussi ses secrets en env vars). `APP_JWT_SECRET`, `WP_URL`, etc. utilisaient déjà `os.getenv`, seul ce endroit était concerné.
+
+**Limite connue** : `irr_inventory.db` (SQLite) n'est pas versionné (`.gitignore`) et le disque des hébergeurs free n'est pas persistant entre déploiements — la base repart à vide à chaque redeploy du service API. Suffisant pour un test fonctionnel, pas pour de la donnée durable (même limite déjà existante sur Streamlit Cloud).
 
 ---
 
