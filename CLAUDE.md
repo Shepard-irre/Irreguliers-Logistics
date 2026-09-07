@@ -20,24 +20,40 @@ Comptes par défaut (si DB vierge) : `Shepard40 / sc1234`, `Darkias / sc1234`, `
 
 ---
 
-## Backend API (FastAPI) — migration en cours vers React
+## Backend API (FastAPI) + Frontend React
 
-Le frontend Streamlit est en cours de remplacement par du React (design plafonné). Le backend FastAPI expose la logique de `uex_library.py` en API REST. Direction visuelle validée le 04/09/2026 — thème console fédérale sci-fi (voir mémoire Claude Code `decision_frontend_react_rewrite`).
+Les 8 pages Streamlit (`app.py`) ont été portées avec parité fonctionnelle vers un backend FastAPI + frontend React (thème console fédérale sci-fi, voir mémoire Claude Code `decision_frontend_react_rewrite`). `app.py` reste intact et déployé sur Streamlit Cloud — le React/FastAPI est une réécriture qui tourne en parallèle, pas encore la version "officielle".
+
+**IMPORTANT — jamais `--reload` sur Windows** : laisse des process `python.exe` (multiprocessing.spawn) orphelins qui continuent à servir de l'ancien code silencieusement. Toujours relancer manuellement après une modif backend, puis vérifier via `GET /openapi.json`.
 
 ```bash
 cd backend
-python -m uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --port 8000
 ```
-(lancer depuis `backend/`, pas depuis la racine — les imports du module sont relatifs à ce dossier)
+(lancer depuis `backend/` — `import auth`, `from routers import ...` sont relatifs à ce dossier ; `uex_library.py`/`wp_auth.py`/`config.py` à la racine du repo sont trouvés via `sys.path.insert` dans `main.py`)
+
+```bash
+cd frontend
+npm run dev
+```
 
 - `backend/main.py` — app FastAPI, CORS (`FRONTEND_ORIGIN` env, défaut `http://localhost:5173`), montage des routers
 - `backend/security.py` — JWT API (`APP_JWT_SECRET` ou fallback `IRR_JWT_SECRET`), 12h d'expiration
 - `backend/auth.py` — `POST /auth/login`, `POST /auth/sso` (reprend `WPAuth` tel quel), `get_current_user`/`require_permission` (dépendances FastAPI)
-- `backend/deps.py` — singleton `UEXManager` partagé
-- `backend/routers/raffineries.py` — `GET /raffineries/jobs`, `POST /raffineries/jobs/{id}/confirm`, `DELETE /raffineries/jobs/{id}` (logique confirmation/destination copiée à l'identique de `app.py` lignes ~900-994)
-- `backend/tests/` — pytest, TDD (tdd-guard actif sur ce projet), 17 tests, tout mocké (aucun appel réseau réel vers WP en test)
+- `backend/deps.py` — singleton `UEXManager` partagé + `records_without_nan()` (pandas NaN → JSON)
+- `backend/routers/` — un router par page Streamlit (`raffineries`, `sessions`, `commerce`, `gestion_stock`, `stock_federation`, `commerce_federation`, `transport`, `crafting`)
+- `backend/tests/` — pytest, TDD (tdd-guard actif sur ce projet), 74 tests, tout mocké (aucun appel réseau/DB réel)
+- `frontend/` — React 19 + Vite + Tailwind, `VITE_API_BASE` (défaut `http://localhost:8000`) pointe vers l'API
 
-Seuls Raffineries est fait pour l'instant. Les 7 autres pages (`app.py`) restent à porter une par une.
+### Déploiement (test en ligne)
+
+`render.yaml` à la racine décrit un Blueprint Render avec 2 services :
+- `irreguliers-logistics-api` — web service Python, `pip install -r requirements.txt` puis `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
+- `irreguliers-logistics-app` — static site, `cd frontend && npm ci && npm run build`, publie `frontend/dist`
+
+**Piège** : `uex_library.py` lit certaines clés via `dotenv_values(<racine>/.env)` directement (pas `os.environ`), donc les env vars classiques du dashboard Render ne suffisent pas pour `UEX_BEARER_TOKEN`/`UEX_SECRET_KEY`. Solution : ajouter un **Secret File** nommé `.env` (chemin `.env`, racine du repo) sur le service `irreguliers-logistics-api` avec le même contenu que le `.env` local (`WP_URL`, `UEX_BEARER_TOKEN`, `UEX_SECRET_KEY`, `ANTHROPIC_API_KEY`, `APP_JWT_SECRET`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `NOTIFY_EMAIL`). Ce fichier satisfait à la fois `dotenv_values()` et les `load_dotenv()` classiques.
+
+**Limite connue** : `irr_inventory.db` (SQLite) n'est pas versionné (`.gitignore`) et le disque Render free n'est pas persistant entre déploiements — la base repart à vide à chaque redeploy du service API. Suffisant pour un test fonctionnel, pas pour de la donnée durable (même limite déjà existante sur Streamlit Cloud).
 
 ---
 
