@@ -26,4 +26,16 @@ Thumbs.db
 # Claude Code runtime
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+.claude/tdd-guard/
 .mail_replied.json
+receipts/
+review-receipts/
+**/receipts/
+**/review-receipts/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Mail attachments (données perso téléchargées, pas du code)
+mail_attachments/

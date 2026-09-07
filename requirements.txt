@@ -5,3 +5,8 @@ python-dotenv
 PyJWT
 pymysql
 anthropic
+fastapi
+uvicorn[standard]
+httpx
+pytest
+python-multipart

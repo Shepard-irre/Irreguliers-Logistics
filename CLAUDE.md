@@ -20,6 +20,27 @@ Comptes par défaut (si DB vierge) : `Shepard40 / sc1234`, `Darkias / sc1234`, `
 
 ---
 
+## Backend API (FastAPI) — migration en cours vers React
+
+Le frontend Streamlit est en cours de remplacement par du React (design plafonné). Le backend FastAPI expose la logique de `uex_library.py` en API REST. Direction visuelle validée le 04/09/2026 — thème console fédérale sci-fi (voir mémoire Claude Code `decision_frontend_react_rewrite`).
+
+```bash
+cd backend
+python -m uvicorn main:app --reload --port 8000
+```
+(lancer depuis `backend/`, pas depuis la racine — les imports du module sont relatifs à ce dossier)
+
+- `backend/main.py` — app FastAPI, CORS (`FRONTEND_ORIGIN` env, défaut `http://localhost:5173`), montage des routers
+- `backend/security.py` — JWT API (`APP_JWT_SECRET` ou fallback `IRR_JWT_SECRET`), 12h d'expiration
+- `backend/auth.py` — `POST /auth/login`, `POST /auth/sso` (reprend `WPAuth` tel quel), `get_current_user`/`require_permission` (dépendances FastAPI)
+- `backend/deps.py` — singleton `UEXManager` partagé
+- `backend/routers/raffineries.py` — `GET /raffineries/jobs`, `POST /raffineries/jobs/{id}/confirm`, `DELETE /raffineries/jobs/{id}` (logique confirmation/destination copiée à l'identique de `app.py` lignes ~900-994)
+- `backend/tests/` — pytest, TDD (tdd-guard actif sur ce projet), 17 tests, tout mocké (aucun appel réseau réel vers WP en test)
+
+Seuls Raffineries est fait pour l'instant. Les 7 autres pages (`app.py`) restent à porter une par une.
+
+---
+
 ## Architecture
 
 ```
