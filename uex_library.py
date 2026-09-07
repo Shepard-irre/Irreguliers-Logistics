@@ -25,7 +25,8 @@ class UEXManager:
         cfg = dotenv_values(Path(__file__).parent / '.env')
         return {
             "Authorization": f"Bearer {cfg.get('UEX_BEARER_TOKEN', '')}",
-            "secret-key": cfg.get('UEX_SECRET_KEY', '')
+            "secret-key": cfg.get('UEX_SECRET_KEY', ''),
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         }
 
     def _get_data(self, endpoint, params=None):
