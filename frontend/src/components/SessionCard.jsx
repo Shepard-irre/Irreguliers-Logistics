@@ -252,29 +252,12 @@ export default function SessionCard({ session, onChanged }) {
                     <div className="text-irr-dim text-sm">Aucun bon de transport rattaché à cette session.</div>
                   ) : (
                     <>
-                      <div className="grid grid-cols-3 gap-3 text-sm">
-                        <FinTile label="Recette estimée" value={fmtAuec(summary.total_vente_auec)} />
-                        <FinTile label="Part Fédération (20%)" value={fmtAuec(summary.part_federation)} />
-                        <FinTile label="Part Transport (15%)" value={fmtAuec(summary.part_transport)} />
-                        <FinTile label="Frais vaisseaux" value={fmtAuec(summary.total_expenses)} />
-                        <FinTile label="Reste à partager" value={fmtAuec(summary.reste_a_partager)} />
-                        <FinTile
-                          label={`Salaire/joueur (${summary.nb_joueurs})`}
-                          value={fmtAuec(summary.salaire_par_joueur)}
-                          accent
-                        />
-                      </div>
                       {summary.crew.length > 0 && (
                         <div className="text-xs text-irr-dim">Mineurs présents : {summary.crew.join(', ')}</div>
                       )}
-                      <SettlementBlock
-                        title="Règlement stock personnel"
-                        settlement={summary.personnel_settlement}
-                      />
-                      <SettlementBlock
-                        title="Règlement stock fédération"
-                        settlement={summary.federal_settlement}
-                      />
+                      <SettlementBlock title="Règlement vente" settlement={summary.vente_settlement} />
+                      <SettlementBlock title="Règlement stock personnel" settlement={summary.personnel_settlement} />
+                      <SettlementBlock title="Règlement stock fédération" settlement={summary.federal_settlement} />
                     </>
                   )}
                 </div>
@@ -302,6 +285,7 @@ function SettlementBlock({ title, settlement }) {
         <FinTile label="Recette estimée" value={fmtAuec(settlement.recette)} />
         <FinTile label="Part Fédération (20%)" value={fmtAuec(settlement.part_federation)} />
         <FinTile label="Part Transport (15%)" value={fmtAuec(settlement.part_transport)} />
+        {settlement.expenses > 0 && <FinTile label="Frais vaisseaux" value={fmtAuec(settlement.expenses)} />}
         <FinTile label="Reste à partager" value={fmtAuec(settlement.reste)} />
         <FinTile label="Salaire/joueur" value={fmtAuec(settlement.salaire_par_joueur)} accent />
       </div>

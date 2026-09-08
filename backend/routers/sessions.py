@@ -61,20 +61,22 @@ def _estimate_revenue(orders, comm_name_map, system_name, uex):
     return total, lines
 
 
-def _settlement(orders, payer, nb_crew, transport_participates, comm_name_map, system_name, uex):
+def _settlement(orders, payer, nb_crew, transport_participates, comm_name_map, system_name, uex, expenses=0):
     if not orders:
         return None
-    recette, _lines = _estimate_revenue(orders, comm_name_map, system_name, uex)
+    recette, lines = _estimate_revenue(orders, comm_name_map, system_name, uex)
     part_fed = recette * 0.20
     part_transport = recette * 0.15 if transport_participates else 0
-    reste = recette - part_fed - part_transport
+    reste = recette - part_fed - part_transport - expenses
     return {
         "payer": payer,
         "recette": recette,
         "part_federation": part_fed,
         "part_transport": part_transport,
+        "expenses": expenses,
         "reste": reste,
         "salaire_par_joueur": reste / nb_crew if nb_crew > 0 else 0,
+        "lines": lines,
     }
 
 
@@ -202,16 +204,14 @@ def financial_summary(
             comm_name_map[clean] = c.get("id")
 
     system_name = summary["session"]["star_system"]
-    total_vente_auec, vente_lines = _estimate_revenue(summary["orders_vente"], comm_name_map, system_name, uex)
-
     total_exp = summary["total_expenses"]
-    part_fed = total_vente_auec * 0.20
-    part_transport = total_vente_auec * 0.15
-    reste = total_vente_auec - part_fed - part_transport - total_exp
     nb = summary["nb_joueurs"]
-    salaire = reste / nb if nb > 0 else 0
-
     transport_participates = bool(summary.get("transport_crew"))
+
+    vente_settlement = _settlement(
+        summary["orders_vente"], "Transporteurs",
+        nb, transport_participates, comm_name_map, system_name, uex, expenses=total_exp,
+    )
     personnel_settlement = _settlement(
         summary.get("orders_personnel", []), summary["session"].get("created_by"),
         nb, transport_participates, comm_name_map, system_name, uex,
@@ -222,16 +222,11 @@ def financial_summary(
     )
 
     return {
-        "vente_lines": vente_lines,
-        "total_vente_auec": total_vente_auec,
-        "part_federation": part_fed,
-        "part_transport": part_transport,
         "total_expenses": total_exp,
-        "reste_a_partager": reste,
         "nb_joueurs": nb,
-        "salaire_par_joueur": salaire,
         "crew": summary["crew"],
         "has_orders": bool(summary["orders_vente"] or summary["orders_stock_fed"] or summary.get("orders_personnel")),
+        "vente_settlement": vente_settlement,
         "personnel_settlement": personnel_settlement,
         "federal_settlement": federal_settlement,
     }

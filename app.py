@@ -166,35 +166,46 @@ def estimate_orders_revenue(orders, comm_name_map, system_name):
         })
     return total, lines
 
-def compute_settlement(orders, payer, nb_crew, transport_participates, comm_name_map, system_name):
-    """Calcule qui doit combien à chaque membre pour un lot de bordereaux (stock perso ou fédéral)."""
+def compute_settlement(orders, payer, nb_crew, transport_participates, comm_name_map, system_name, expenses=0):
+    """Calcule qui doit combien à chaque membre pour un lot de bordereaux (vente, stock perso ou fédéral)."""
     if not orders:
         return None
-    recette, _lines = estimate_orders_revenue(orders, comm_name_map, system_name)
+    recette, lines = estimate_orders_revenue(orders, comm_name_map, system_name)
     part_fed = recette * 0.20
     part_transport = recette * 0.15 if transport_participates else 0
-    reste = recette - part_fed - part_transport
+    reste = recette - part_fed - part_transport - expenses
     return {
         'payer': payer,
         'recette': recette,
         'part_federation': part_fed,
         'part_transport': part_transport,
+        'expenses': expenses,
         'reste': reste,
         'salaire_par_joueur': reste / nb_crew if nb_crew > 0 else 0,
+        'lines': lines,
     }
 
 def render_settlement_block(title, settlement):
     if not settlement:
         return
+    st.divider()
     st.markdown(f"**{title}**")
     st.caption(f"{settlement['payer']} doit **{settlement['salaire_par_joueur']:,.0f} aUEC** à chaque membre ayant participé.")
+    if settlement['lines']:
+        st.dataframe(pd.DataFrame(settlement['lines']), use_container_width=True, hide_index=True)
     s1, s2, s3 = st.columns(3)
     s1.metric("Recette estimée", f"{settlement['recette']:,.0f} aUEC")
     s2.metric("Part Fédération (20%)", f"{settlement['part_federation']:,.0f} aUEC")
     s3.metric("Part Transporteurs (15%)", f"{settlement['part_transport']:,.0f} aUEC")
-    s4, s5 = st.columns(2)
-    s4.metric("Reste à partager", f"{settlement['reste']:,.0f} aUEC")
-    s5.metric("Salaire/joueur", f"{settlement['salaire_par_joueur']:,.0f} aUEC")
+    if settlement['expenses'] > 0:
+        s4, s5, s6 = st.columns(3)
+        s4.metric("Frais vaisseaux", f"{settlement['expenses']:,.0f} aUEC")
+        s5.metric("Reste à partager", f"{settlement['reste']:,.0f} aUEC")
+        s6.metric("Salaire/joueur", f"{settlement['salaire_par_joueur']:,.0f} aUEC")
+    else:
+        s4, s5 = st.columns(2)
+        s4.metric("Reste à partager", f"{settlement['reste']:,.0f} aUEC")
+        s5.metric("Salaire/joueur", f"{settlement['salaire_par_joueur']:,.0f} aUEC")
 
 CAT_MAP = {
     "🌌 Moteurs Quantum (QT Drive)": [22, 86],
@@ -427,57 +438,18 @@ if selected_page == "🏗️ Raffineries":
                                 if clean not in comm_name_map:
                                     comm_name_map[clean] = c.get('id')
 
-                        # Estimer revenus depuis UEX selon le système de la session
                         system_name = detail['star_system']
-                        total_vente_auec = 0
-                        vente_lines = []
-                        for order in summary['orders_vente']:
-                            # Toujours chercher par nom nettoyé — l'ID en DB est celui du brut (sans prix)
-                            name_clean = order['commodity_name'].lower().replace(' (ore)', '').replace(' (raw)', '').strip()
-                            comm_id = comm_name_map.get(name_clean)
-                            if comm_id:
-                                prices = uex.get_prices_for_item(int(comm_id))
-                                buyers_sys = [p for p in prices
-                                              if p.get('price_sell', 0) > 0
-                                              and p.get('star_system_name') == system_name]
-                                if not buyers_sys:
-                                    buyers_sys = [p for p in prices if p.get('price_sell', 0) > 0]
-                                best_price = max((p['price_sell'] for p in buyers_sys), default=0)
-                            else:
-                                best_price = 0
-                            rev = best_price * order['quantity']
-                            total_vente_auec += rev
-                            vente_lines.append({
-                                'Minerai': order['commodity_name'],
-                                'SCU': order['quantity'],
-                                'Prix/SCU': f"{best_price:,} aUEC",
-                                'Recette estimée': f"{rev:,.0f} aUEC",
-                            })
-
-                        if vente_lines:
-                            st.dataframe(pd.DataFrame(vente_lines), use_container_width=True, hide_index=True)
-
-                        total_exp = summary['total_expenses']
-                        part_fed = total_vente_auec * 0.20
-                        part_transport = total_vente_auec * 0.15
-                        reste = total_vente_auec - part_fed - part_transport - total_exp
                         nb = summary['nb_joueurs']
-                        salaire = reste / nb if nb > 0 else 0
-
-                        r1, r2, r3 = st.columns(3)
-                        r1.metric("Recette totale estimée", f"{total_vente_auec:,.0f} aUEC")
-                        r2.metric("Part Fédération (20%)", f"{part_fed:,.0f} aUEC")
-                        r3.metric("Part Transporteurs (15%)", f"{part_transport:,.0f} aUEC")
-
-                        r4, r5, r6 = st.columns(3)
-                        r4.metric("Frais vaisseaux", f"{total_exp:,.0f} aUEC")
-                        r5.metric("Reste à partager", f"{reste:,.0f} aUEC")
-                        r6.metric(f"Salaire/joueur ({nb} joueurs)", f"{salaire:,.0f} aUEC")
+                        total_exp = summary['total_expenses']
 
                         if summary['crew']:
                             st.caption(f"Mineurs présents : {', '.join(summary['crew'])}")
 
                         transport_participates = bool(summary.get('transport_crew'))
+                        vente_settlement = compute_settlement(
+                            summary['orders_vente'], "Transporteurs",
+                            nb, transport_participates, comm_name_map, system_name, expenses=total_exp,
+                        )
                         personnel_settlement = compute_settlement(
                             summary.get('orders_personnel', []), summary['session'].get('created_by'),
                             nb, transport_participates, comm_name_map, system_name,
@@ -486,8 +458,7 @@ if selected_page == "🏗️ Raffineries":
                             summary['orders_stock_fed'], "Fédération",
                             nb, transport_participates, comm_name_map, system_name,
                         )
-                        if personnel_settlement or federal_settlement:
-                            st.divider()
+                        render_settlement_block("🚀 Règlement vente", vente_settlement)
                         render_settlement_block("💰 Règlement stock personnel", personnel_settlement)
                         render_settlement_block("🏛️ Règlement stock fédération", federal_settlement)
 

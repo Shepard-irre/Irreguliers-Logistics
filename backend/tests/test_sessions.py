@@ -145,15 +145,17 @@ def test_remove_expense(fake_uex, client):
     fake_uex.remove_session_expense.assert_called_once_with(6)
 
 
-def test_financial_summary_computes_shares_from_best_matching_market_price(fake_uex, client):
+def test_financial_summary_vente_settlement_owed_by_transporters(fake_uex, client):
     fake_uex.get_session_financial_summary.return_value = {
-        "session": {"id": 4, "star_system": "Stanton"},
+        "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
         "crew": ["Shepard40", "Darkias", "Camus68"],
         "nb_joueurs": 3,
+        "transport_crew": ["Nispi1"],
         "expenses": [{"description": "Carburant", "amount_auec": 1000}],
         "total_expenses": 1000,
         "orders_vente": [{"commodity_name": "Quantainium", "quantity": 100}],
         "orders_stock_fed": [],
+        "orders_personnel": [],
     }
     fake_uex.get_commodities.return_value = [{"id": 5, "name": "Quantainium"}]
     fake_uex.get_prices_for_item.return_value = [
@@ -164,16 +166,21 @@ def test_financial_summary_computes_shares_from_best_matching_market_price(fake_
     resp = client.get("/raffineries/sessions/4/financial-summary")
 
     assert resp.status_code == 200
-    fake_uex.get_prices_for_item.assert_called_once_with(5)
     body = resp.json()
-    assert body["total_vente_auec"] == 5000
-    assert body["part_federation"] == 1000
-    assert body["part_transport"] == 750
-    assert body["reste_a_partager"] == 2250
-    assert body["salaire_par_joueur"] == 750
-    assert body["vente_lines"] == [
-        {"commodity_name": "Quantainium", "quantity": 100, "price_per_scu": 50, "estimated_revenue": 5000}
-    ]
+    assert body["vente_settlement"] == {
+        "payer": "Transporteurs",
+        "recette": 5000,
+        "part_federation": 1000,
+        "part_transport": 750,
+        "expenses": 1000,
+        "reste": 2250,
+        "salaire_par_joueur": 750,
+        "lines": [
+            {"commodity_name": "Quantainium", "quantity": 100, "price_per_scu": 50, "estimated_revenue": 5000}
+        ],
+    }
+    assert body["personnel_settlement"] is None
+    assert body["federal_settlement"] is None
 
 
 def test_financial_summary_computes_personnel_settlement(fake_uex, client):
@@ -200,8 +207,12 @@ def test_financial_summary_computes_personnel_settlement(fake_uex, client):
         "recette": 5000,
         "part_federation": 1000,
         "part_transport": 750,
+        "expenses": 0,
         "reste": 3250,
         "salaire_par_joueur": 1625,
+        "lines": [
+            {"commodity_name": "Quantainium", "quantity": 100, "price_per_scu": 50, "estimated_revenue": 5000}
+        ],
     }
     assert body["federal_settlement"] is None
     assert body["has_orders"] is True
@@ -231,8 +242,12 @@ def test_financial_summary_computes_federal_settlement_without_transport_cost(fa
         "recette": 5000,
         "part_federation": 1000,
         "part_transport": 0,
+        "expenses": 0,
         "reste": 4000,
         "salaire_par_joueur": 2000,
+        "lines": [
+            {"commodity_name": "Quantainium", "quantity": 100, "price_per_scu": 50, "estimated_revenue": 5000}
+        ],
     }
     assert body["personnel_settlement"] is None
 
