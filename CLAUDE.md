@@ -45,11 +45,12 @@ npm run dev
 - `backend/tests/` — pytest, TDD (tdd-guard actif sur ce projet), 74 tests, tout mocké (aucun appel réseau/DB réel)
 - `frontend/` — React 19 + Vite + Tailwind, `VITE_API_BASE` (défaut `http://localhost:8000`) pointe vers l'API
 
-### Déploiement (test en ligne)
+### Déploiement (test en ligne) — ✅ fonctionnel
 
-**Frontend** : `render.yaml` décrit un service Render static site `irreguliers-logistics-app` (`cd frontend && npm ci && npm run build`, publie `frontend/dist`). Fonctionne bien, reste sur Render.
+- **Frontend** : https://irreguliers-logistics-app.onrender.com — Render static site (`render.yaml`, `cd frontend && npm ci && npm run build`, publie `frontend/dist`), `VITE_API_BASE` pointe vers le backend Railway.
+- **Backend** : https://irreguliers-logistics-api-production.up.railway.app — Railway (`railway.json` à la racine : Nixpacks, `pip install -r requirements.txt`, start `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`). Variables d'env classiques (pas de Secret File nécessaire, voir piège résolu ci-dessous).
 
-**Backend** : d'abord tenté sur Render (`irreguliers-logistics-api` dans `render.yaml`), abandonné — l'IP de sortie de Render se fait bloquer par le challenge JS Cloudflare d'`api.uexcorp.space` (HTTP 403 "Just a moment..." sur `commodities`/`terminals`/`refineries_methods`, testé avec et sans `User-Agent` navigateur, sans succès). Bascule sur **Railway** (`railway.json` à la racine : Nixpacks, `pip install -r requirements.txt`, start `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`). Si Railway est un jour flagué à son tour, c'est un problème d'IP de sortie de l'hébergeur, pas de code — changer d'hébergeur backend est la seule vraie option (avec potentiellement `render.yaml` à réactiver un jour si Render change de plage IP).
+**Backend d'abord tenté sur Render**, abandonné — l'IP de sortie de Render se fait bloquer par le challenge JS Cloudflare d'`api.uexcorp.space` (HTTP 403 "Just a moment..." sur `commodities`/`terminals`/`refineries_methods`, testé avec et sans `User-Agent` navigateur, sans succès). L'IP de sortie de Railway n'est pas flaguée — reference-data (minerais/terminaux/méthodes) fonctionne. Si Railway est un jour flagué à son tour, c'est un problème d'IP de sortie de l'hébergeur, pas de code — changer d'hébergeur backend est la seule vraie option (`render.yaml` gardait la config Render en historique jusqu'au commit `ad40440`, qui l'a retirée — la retrouver dans l'historique git si besoin de revenir dessus un jour).
 
 **Piège résolu** : `uex_library.py.headers` lisait `UEX_BEARER_TOKEN`/`UEX_SECRET_KEY` via `dotenv_values(<racine>/.env)` — un parsing direct du fichier disque, ignorant `os.environ`. Sans fichier `.env` réel sur l'hébergeur (gitignored), les env vars classiques du dashboard ne suffisaient pas. Remplacé par `os.getenv(...)` (commit `1875841`+ suivant) — fonctionne avec de simples Environment Variables sur n'importe quel hébergeur (Render, Railway, Streamlit Cloud qui expose aussi ses secrets en env vars). `APP_JWT_SECRET`, `WP_URL`, etc. utilisaient déjà `os.getenv`, seul ce endroit était concerné.
 
