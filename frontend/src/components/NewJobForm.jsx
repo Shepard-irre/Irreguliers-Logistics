@@ -79,7 +79,8 @@ export default function NewJobForm({ onCreated, onClose }) {
 
   useEffect(() => {
     if (!refData) return
-    if (!terminalId && terminals.length) setTerminalId(String(terminals[0].id))
+    const stillValid = terminalId && terminals.some((t) => String(t.id) === terminalId)
+    if (!stillValid && terminals.length) setTerminalId(String(terminals[0].id))
     if (!methodName && refData.methods.length) setMethodName(refData.methods[0].name)
     if (!lineCommodityId && refData.commodities.length) setLineCommodityId(String(refData.commodities[0].id))
   }, [refData, terminals, terminalId, methodName, lineCommodityId])

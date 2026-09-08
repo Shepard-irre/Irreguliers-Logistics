@@ -9,7 +9,7 @@ vi.mock('../lib/api', () => ({
   analyzeScreenshot: vi.fn(),
 }))
 
-import { getRaffineriesReferenceData, analyzeScreenshot } from '../lib/api'
+import { getRaffineriesReferenceData, analyzeScreenshot, estimateRaffineriesJob, createRaffineriesJob } from '../lib/api'
 import NewJobForm from './NewJobForm'
 
 const REF_DATA = {
@@ -17,6 +17,19 @@ const REF_DATA = {
   terminals: [{ id: 10, name: 'HDMS-Hadley', star_system_name: 'Stanton' }],
   methods: [{ name: 'Cormack' }],
   sessions: [],
+}
+
+const REF_DATA_MULTI_SYSTEM = {
+  commodities: [{ id: 1, name: 'Quantainium (Raw)' }],
+  terminals: [
+    { id: 10, name: 'HDMS-Hadley', star_system_name: 'Stanton' },
+    { id: 20, name: 'Ashland Sallow', star_system_name: 'Pyro' },
+  ],
+  methods: [{ name: 'Cormack' }],
+  sessions: [
+    { id: 1, numero: 'MIN001', star_system: 'Stanton' },
+    { id: 2, numero: 'MIN002', star_system: 'Pyro' },
+  ],
 }
 
 describe('NewJobForm — mode batch', () => {
@@ -92,5 +105,32 @@ describe('NewJobForm — mode batch', () => {
     expect(await screen.findByText('Lots à raffiner')).toBeInTheDocument()
     expect(screen.getAllByText('Quantainium (Raw)')).toHaveLength(2)
     expect(screen.queryAllByText('Agricium (Raw)')).toHaveLength(1) // only the <option>, no line
+  })
+
+  it('reste utilisable quand on change de session de minage après avoir choisi une station de raffinage', async () => {
+    getRaffineriesReferenceData.mockResolvedValue(REF_DATA_MULTI_SYSTEM)
+    estimateRaffineriesJob.mockResolvedValue({
+      estimated_output: 80, yield_pct: 80, confidence: 'Élevée', audit_count: 5,
+    })
+    createRaffineriesJob.mockResolvedValue({ id: 1 })
+    const user = userEvent.setup()
+
+    render(<NewJobForm onCreated={() => {}} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText('+ Ajouter')).toBeInTheDocument())
+
+    // Terminal auto-selects HDMS-Hadley (Stanton) since no session is picked yet.
+    await user.click(screen.getByText('+ Ajouter'))
+    await screen.findByText('Lots à raffiner')
+
+    // Switching to a Pyro session re-filters the terminal list — HDMS-Hadley (Stanton) drops out.
+    await user.selectOptions(screen.getByLabelText('Session de minage'), 'MIN002 — Pyro')
+
+    await user.click(screen.getByText('Calculer l\'estimation pour tous les lots'))
+    await screen.findByText('Enregistrer tous les lots restants')
+    await user.click(screen.getByText('Enregistrer tous les lots restants'))
+
+    await waitFor(() => expect(createRaffineriesJob).toHaveBeenCalled())
+    expect(createRaffineriesJob.mock.calls[0][0].terminal_name).toContain('Ashland Sallow')
+    expect(screen.queryByText(/Cannot read properties of undefined/)).not.toBeInTheDocument()
   })
 })
