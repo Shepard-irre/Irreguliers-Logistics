@@ -24,7 +24,7 @@ def test_headers_read_token_from_process_env_without_env_file(monkeypatch):
     assert mgr.headers["secret-key"] == "secret-from-process-env"
 
 
-def test_financial_summary_includes_personnel_orders_and_transport_crew(tmp_path):
+def test_financial_summary_includes_personal_stock_from_this_session_and_transport_crew(tmp_path):
     mgr = _fresh_manager(tmp_path)
     with sqlite3.connect(mgr.db_path) as conn:
         c = conn.cursor()
@@ -36,26 +36,36 @@ def test_financial_summary_includes_personnel_orders_and_transport_crew(tmp_path
         c.execute("INSERT INTO session_ships (id, session_id, ship_name, ship_role) VALUES (2, 1, 'Cutlass', 'transport')")
         c.execute("INSERT INTO session_crew (ship_id, username) VALUES (1, 'Shepard40')")
         c.execute("INSERT INTO session_crew (ship_id, username) VALUES (2, 'Darkias')")
+        # Confirming a job to "personnel" writes to personal_stock, not transport_orders
+        # (confirm_job only creates a transport_order for vente/stock_federal).
         c.execute(
-            "INSERT INTO transport_orders "
-            "(id, created_by, commodity_name, quantity, quality, pickup_location, delivery_location, "
-            "destination, status, session_id) "
-            "VALUES (1, 'Shepard40', 'Quantainium', 100, 500, 'A', 'B', 'personnel', 'delivered', 1)"
+            "INSERT INTO refinery_jobs "
+            "(id, user, commodity_id, commodity_name, terminal_id, terminal_name, method, "
+            "quantity_raw, quantity_estimated, yield_rate, status, session_id) "
+            "VALUES (1, 'Shepard40', 5, 'Quantainium', 1, 'HDMS-Hadley', 'cormack', "
+            "100, 100, 100, 'confirmed', 1)"
+        )
+        c.execute(
+            "INSERT INTO personal_stock (owner, commodity_name, quantity, quality, refinery_job_id, status) "
+            "VALUES ('Shepard40', 'Quantainium', 100, 500, 1, 'active')"
+        )
+        # A refinery job from a DIFFERENT session must not leak into this one's settlement.
+        c.execute(
+            "INSERT INTO refinery_jobs "
+            "(id, user, commodity_id, commodity_name, terminal_id, terminal_name, method, "
+            "quantity_raw, quantity_estimated, yield_rate, status, session_id) "
+            "VALUES (2, 'Shepard40', 5, 'Agricium', 1, 'HDMS-Hadley', 'cormack', "
+            "50, 50, 100, 'confirmed', 2)"
+        )
+        c.execute(
+            "INSERT INTO personal_stock (owner, commodity_name, quantity, quality, refinery_job_id, status) "
+            "VALUES ('Shepard40', 'Agricium', 50, 500, 2, 'active')"
         )
         conn.commit()
 
     summary = mgr.get_session_financial_summary(1)
 
     assert summary["orders_personnel"] == [
-        {
-            "id": 1,
-            "commodity_name": "Quantainium",
-            "quantity": 100.0,
-            "quality": 500,
-            "destination": "personnel",
-            "status": "delivered",
-            "lot_id": None,
-            "commodity_id": None,
-        }
+        {"commodity_name": "Quantainium", "quantity": 100.0, "quality": 500}
     ]
     assert summary["transport_crew"] == ["Darkias"]

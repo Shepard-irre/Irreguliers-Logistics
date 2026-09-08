@@ -907,7 +907,7 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
                 "SELECT description, amount_auec FROM session_expenses WHERE session_id=?",
                 conn, params=(session_id,))
 
-            # Bons de transport de la session
+            # Bons de transport de la session (destinations vente / stock_federal)
             orders_df = pd.read_sql_query("""
                 SELECT t.id, t.commodity_name, t.quantity, t.quality, t.destination,
                        t.status, t.lot_id,
@@ -918,12 +918,21 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
                 WHERE t.session_id = ?
             """, conn, params=(session_id,))
 
+            # Stock personnel confirmé pendant cette session — confirm_job() n'écrit PAS de
+            # bon de transport pour la destination "personnel", uniquement personal_stock.
+            personal_df = pd.read_sql_query("""
+                SELECT ps.commodity_name, ps.quantity, ps.quality
+                FROM personal_stock ps
+                JOIN refinery_jobs rj ON ps.refinery_job_id = rj.id
+                WHERE rj.session_id = ?
+            """, conn, params=(session_id,))
+
         crew = crew_df['username'].tolist() if not crew_df.empty else []
         transport_crew = transport_crew_df['username'].tolist() if not transport_crew_df.empty else []
         total_expenses = float(exp_df['amount_auec'].sum()) if not exp_df.empty else 0.0
         orders_vente = orders_df[orders_df['destination'] == 'vente'].to_dict('records') if not orders_df.empty else []
         orders_stock = orders_df[orders_df['destination'] == 'stock_federal'].to_dict('records') if not orders_df.empty else []
-        orders_personnel = orders_df[orders_df['destination'] == 'personnel'].to_dict('records') if not orders_df.empty else []
+        orders_personnel = personal_df.to_dict('records') if not personal_df.empty else []
 
         return {
             'session': session,
