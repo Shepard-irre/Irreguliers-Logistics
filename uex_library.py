@@ -894,6 +894,14 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
                 WHERE ss.session_id = ? AND ss.ship_role = 'mining'
             """, conn, params=(session_id,))
 
+            # Membres transporteurs (vaisseaux de transport)
+            transport_crew_df = pd.read_sql_query("""
+                SELECT DISTINCT sc.username
+                FROM session_crew sc
+                JOIN session_ships ss ON sc.ship_id = ss.id
+                WHERE ss.session_id = ? AND ss.ship_role = 'transport'
+            """, conn, params=(session_id,))
+
             # Frais
             exp_df = pd.read_sql_query(
                 "SELECT description, amount_auec FROM session_expenses WHERE session_id=?",
@@ -911,18 +919,22 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
             """, conn, params=(session_id,))
 
         crew = crew_df['username'].tolist() if not crew_df.empty else []
+        transport_crew = transport_crew_df['username'].tolist() if not transport_crew_df.empty else []
         total_expenses = float(exp_df['amount_auec'].sum()) if not exp_df.empty else 0.0
         orders_vente = orders_df[orders_df['destination'] == 'vente'].to_dict('records') if not orders_df.empty else []
         orders_stock = orders_df[orders_df['destination'] == 'stock_federal'].to_dict('records') if not orders_df.empty else []
+        orders_personnel = orders_df[orders_df['destination'] == 'personnel'].to_dict('records') if not orders_df.empty else []
 
         return {
             'session': session,
             'crew': crew,
             'nb_joueurs': len(crew),
+            'transport_crew': transport_crew,
             'expenses': exp_df.to_dict('records') if not exp_df.empty else [],
             'total_expenses': total_expenses,
             'orders_vente': orders_vente,
             'orders_stock_fed': orders_stock,
+            'orders_personnel': orders_personnel,
         }
 
     # --- AUTHENTICATION ---

@@ -176,6 +176,67 @@ def test_financial_summary_computes_shares_from_best_matching_market_price(fake_
     ]
 
 
+def test_financial_summary_computes_personnel_settlement(fake_uex, client):
+    fake_uex.get_session_financial_summary.return_value = {
+        "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
+        "crew": ["Shepard40", "Darkias"],
+        "nb_joueurs": 2,
+        "transport_crew": ["Camus68"],
+        "expenses": [],
+        "total_expenses": 0,
+        "orders_vente": [],
+        "orders_stock_fed": [],
+        "orders_personnel": [{"commodity_name": "Quantainium", "quantity": 100}],
+    }
+    fake_uex.get_commodities.return_value = [{"id": 5, "name": "Quantainium"}]
+    fake_uex.get_prices_for_item.return_value = [{"price_sell": 50, "star_system_name": "Stanton"}]
+
+    resp = client.get("/raffineries/sessions/4/financial-summary")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["personnel_settlement"] == {
+        "payer": "Shepard40",
+        "recette": 5000,
+        "part_federation": 1000,
+        "part_transport": 750,
+        "reste": 3250,
+        "salaire_par_joueur": 1625,
+    }
+    assert body["federal_settlement"] is None
+    assert body["has_orders"] is True
+
+
+def test_financial_summary_computes_federal_settlement_without_transport_cost(fake_uex, client):
+    fake_uex.get_session_financial_summary.return_value = {
+        "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
+        "crew": ["Shepard40", "Darkias"],
+        "nb_joueurs": 2,
+        "transport_crew": [],
+        "expenses": [],
+        "total_expenses": 0,
+        "orders_vente": [],
+        "orders_stock_fed": [{"commodity_name": "Quantainium", "quantity": 100}],
+        "orders_personnel": [],
+    }
+    fake_uex.get_commodities.return_value = [{"id": 5, "name": "Quantainium"}]
+    fake_uex.get_prices_for_item.return_value = [{"price_sell": 50, "star_system_name": "Stanton"}]
+
+    resp = client.get("/raffineries/sessions/4/financial-summary")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["federal_settlement"] == {
+        "payer": "Fédération",
+        "recette": 5000,
+        "part_federation": 1000,
+        "part_transport": 0,
+        "reste": 4000,
+        "salaire_par_joueur": 2000,
+    }
+    assert body["personnel_settlement"] is None
+
+
 def test_financial_summary_404_when_session_missing(fake_uex, client):
     fake_uex.get_session_financial_summary.return_value = None
 

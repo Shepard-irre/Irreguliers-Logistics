@@ -267,6 +267,14 @@ export default function SessionCard({ session, onChanged }) {
                       {summary.crew.length > 0 && (
                         <div className="text-xs text-irr-dim">Mineurs présents : {summary.crew.join(', ')}</div>
                       )}
+                      <SettlementBlock
+                        title="Règlement stock personnel"
+                        settlement={summary.personnel_settlement}
+                      />
+                      <SettlementBlock
+                        title="Règlement stock fédération"
+                        settlement={summary.federal_settlement}
+                      />
                     </>
                   )}
                 </div>
@@ -275,6 +283,28 @@ export default function SessionCard({ session, onChanged }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function SettlementBlock({ title, settlement }) {
+  if (!settlement) return null
+  return (
+    <div className="flex flex-col gap-3 border-t border-irr-border pt-4">
+      <span className="text-[10px] font-display font-semibold tracking-[0.14em] uppercase text-irr-dim">
+        {title}
+      </span>
+      <div className="text-xs text-irr-text">
+        <span className="text-irr-accent font-semibold">{settlement.payer}</span> doit{' '}
+        <span className="font-mono font-semibold">{fmtAuec(settlement.salaire_par_joueur)}</span> à chaque membre ayant participé.
+      </div>
+      <div className="grid grid-cols-3 gap-3 text-sm">
+        <FinTile label="Recette estimée" value={fmtAuec(settlement.recette)} />
+        <FinTile label="Part Fédération (20%)" value={fmtAuec(settlement.part_federation)} />
+        <FinTile label="Part Transport (15%)" value={fmtAuec(settlement.part_transport)} />
+        <FinTile label="Reste à partager" value={fmtAuec(settlement.reste)} />
+        <FinTile label="Salaire/joueur" value={fmtAuec(settlement.salaire_par_joueur)} accent />
+      </div>
     </div>
   )
 }

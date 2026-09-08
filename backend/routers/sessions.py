@@ -34,6 +34,50 @@ def _clean_commodity_key(name: str) -> str:
     return name.lower().replace(" (ore)", "").replace(" (raw)", "").strip()
 
 
+def _estimate_revenue(orders, comm_name_map, system_name, uex):
+    total = 0
+    lines = []
+    for order in orders:
+        name_clean = _clean_commodity_key(order["commodity_name"])
+        comm_id = comm_name_map.get(name_clean)
+        best_price = 0
+        if comm_id:
+            prices = uex.get_prices_for_item(int(comm_id))
+            buyers_sys = [
+                p for p in prices
+                if p.get("price_sell", 0) > 0 and p.get("star_system_name") == system_name
+            ]
+            if not buyers_sys:
+                buyers_sys = [p for p in prices if p.get("price_sell", 0) > 0]
+            best_price = max((p["price_sell"] for p in buyers_sys), default=0)
+        rev = best_price * order["quantity"]
+        total += rev
+        lines.append({
+            "commodity_name": order["commodity_name"],
+            "quantity": order["quantity"],
+            "price_per_scu": best_price,
+            "estimated_revenue": rev,
+        })
+    return total, lines
+
+
+def _settlement(orders, payer, nb_crew, transport_participates, comm_name_map, system_name, uex):
+    if not orders:
+        return None
+    recette, _lines = _estimate_revenue(orders, comm_name_map, system_name, uex)
+    part_fed = recette * 0.20
+    part_transport = recette * 0.15 if transport_participates else 0
+    reste = recette - part_fed - part_transport
+    return {
+        "payer": payer,
+        "recette": recette,
+        "part_federation": part_fed,
+        "part_transport": part_transport,
+        "reste": reste,
+        "salaire_par_joueur": reste / nb_crew if nb_crew > 0 else 0,
+    }
+
+
 @router.get("")
 def list_sessions(
     user: dict = Depends(require_permission("page_raffineries")),
@@ -158,29 +202,7 @@ def financial_summary(
             comm_name_map[clean] = c.get("id")
 
     system_name = summary["session"]["star_system"]
-    total_vente_auec = 0
-    vente_lines = []
-    for order in summary["orders_vente"]:
-        name_clean = _clean_commodity_key(order["commodity_name"])
-        comm_id = comm_name_map.get(name_clean)
-        best_price = 0
-        if comm_id:
-            prices = uex.get_prices_for_item(int(comm_id))
-            buyers_sys = [
-                p for p in prices
-                if p.get("price_sell", 0) > 0 and p.get("star_system_name") == system_name
-            ]
-            if not buyers_sys:
-                buyers_sys = [p for p in prices if p.get("price_sell", 0) > 0]
-            best_price = max((p["price_sell"] for p in buyers_sys), default=0)
-        rev = best_price * order["quantity"]
-        total_vente_auec += rev
-        vente_lines.append({
-            "commodity_name": order["commodity_name"],
-            "quantity": order["quantity"],
-            "price_per_scu": best_price,
-            "estimated_revenue": rev,
-        })
+    total_vente_auec, vente_lines = _estimate_revenue(summary["orders_vente"], comm_name_map, system_name, uex)
 
     total_exp = summary["total_expenses"]
     part_fed = total_vente_auec * 0.20
@@ -188,6 +210,16 @@ def financial_summary(
     reste = total_vente_auec - part_fed - part_transport - total_exp
     nb = summary["nb_joueurs"]
     salaire = reste / nb if nb > 0 else 0
+
+    transport_participates = bool(summary.get("transport_crew"))
+    personnel_settlement = _settlement(
+        summary.get("orders_personnel", []), summary["session"].get("created_by"),
+        nb, transport_participates, comm_name_map, system_name, uex,
+    )
+    federal_settlement = _settlement(
+        summary["orders_stock_fed"], "Fédération",
+        nb, transport_participates, comm_name_map, system_name, uex,
+    )
 
     return {
         "vente_lines": vente_lines,
@@ -199,5 +231,7 @@ def financial_summary(
         "nb_joueurs": nb,
         "salaire_par_joueur": salaire,
         "crew": summary["crew"],
-        "has_orders": bool(summary["orders_vente"] or summary["orders_stock_fed"]),
+        "has_orders": bool(summary["orders_vente"] or summary["orders_stock_fed"] or summary.get("orders_personnel")),
+        "personnel_settlement": personnel_settlement,
+        "federal_settlement": federal_settlement,
     }
