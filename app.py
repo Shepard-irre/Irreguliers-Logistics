@@ -458,6 +458,11 @@ if selected_page == "🏗️ Raffineries":
                             summary['orders_stock_fed'], "Fédération",
                             nb, transport_participates, comm_name_map, system_name,
                         )
+                        salaire_total_mineur = sum(
+                            s['salaire_par_joueur'] for s in (vente_settlement, personnel_settlement, federal_settlement) if s
+                        )
+                        st.metric("💎 Salaire total du mineur", f"{salaire_total_mineur:,.0f} aUEC")
+
                         render_settlement_block("🚀 Règlement vente", vente_settlement)
                         render_settlement_block("💰 Règlement stock personnel", personnel_settlement)
                         render_settlement_block("🏛️ Règlement stock fédération", federal_settlement)

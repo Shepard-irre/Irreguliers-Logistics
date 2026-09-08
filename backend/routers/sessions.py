@@ -221,6 +221,10 @@ def financial_summary(
         nb, transport_participates, comm_name_map, system_name, uex,
     )
 
+    salaire_total_mineur = sum(
+        s["salaire_par_joueur"] for s in (vente_settlement, personnel_settlement, federal_settlement) if s
+    )
+
     return {
         "total_expenses": total_exp,
         "nb_joueurs": nb,
@@ -229,4 +233,5 @@ def financial_summary(
         "vente_settlement": vente_settlement,
         "personnel_settlement": personnel_settlement,
         "federal_settlement": federal_settlement,
+        "salaire_total_mineur": salaire_total_mineur,
     }

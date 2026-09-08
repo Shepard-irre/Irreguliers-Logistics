@@ -255,6 +255,14 @@ export default function SessionCard({ session, onChanged }) {
                       {summary.crew.length > 0 && (
                         <div className="text-xs text-irr-dim">Mineurs présents : {summary.crew.join(', ')}</div>
                       )}
+                      <div className="bg-irr-accent-dim border border-irr-accent p-3 flex items-center justify-between">
+                        <span className="text-[10px] font-display font-semibold tracking-[0.14em] uppercase text-irr-accent">
+                          Salaire total du mineur
+                        </span>
+                        <span className="font-mono font-bold text-irr-accent text-lg">
+                          {fmtAuec(summary.salaire_total_mineur)}
+                        </span>
+                      </div>
                       <SettlementBlock title="Règlement vente" settlement={summary.vente_settlement} />
                       <SettlementBlock title="Règlement stock personnel" settlement={summary.personnel_settlement} />
                       <SettlementBlock title="Règlement stock fédération" settlement={summary.federal_settlement} />

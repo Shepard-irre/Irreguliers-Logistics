@@ -181,6 +181,35 @@ def test_financial_summary_vente_settlement_owed_by_transporters(fake_uex, clien
     }
     assert body["personnel_settlement"] is None
     assert body["federal_settlement"] is None
+    assert body["salaire_total_mineur"] == 750
+
+
+def test_financial_summary_salaire_total_mineur_sums_all_three_settlements(fake_uex, client):
+    fake_uex.get_session_financial_summary.return_value = {
+        "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
+        "crew": ["Shepard40", "Darkias"],
+        "nb_joueurs": 2,
+        "transport_crew": ["Camus68"],
+        "expenses": [],
+        "total_expenses": 0,
+        "orders_vente": [{"commodity_name": "Quantainium", "quantity": 100}],
+        "orders_stock_fed": [{"commodity_name": "Quantainium", "quantity": 100}],
+        "orders_personnel": [{"commodity_name": "Quantainium", "quantity": 100}],
+    }
+    fake_uex.get_commodities.return_value = [{"id": 5, "name": "Quantainium"}]
+    fake_uex.get_prices_for_item.return_value = [{"price_sell": 50, "star_system_name": "Stanton"}]
+
+    resp = client.get("/raffineries/sessions/4/financial-summary")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    expected_total = (
+        body["vente_settlement"]["salaire_par_joueur"]
+        + body["personnel_settlement"]["salaire_par_joueur"]
+        + body["federal_settlement"]["salaire_par_joueur"]
+    )
+    assert body["salaire_total_mineur"] == expected_total
+    assert expected_total == 1625 * 3
 
 
 def test_financial_summary_computes_personnel_settlement(fake_uex, client):
