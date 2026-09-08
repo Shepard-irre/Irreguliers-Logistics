@@ -140,6 +140,62 @@ def fetch_mining_ships():
 def fetch_all_ships():
     return [v['name'] for v in uex.get_vehicles()]
 
+def estimate_orders_revenue(orders, comm_name_map, system_name):
+    """Estime la recette (aUEC) d'une liste de bordereaux, prix le mieux placé du système."""
+    total = 0
+    lines = []
+    for order in orders:
+        name_clean = order['commodity_name'].lower().replace(' (ore)', '').replace(' (raw)', '').strip()
+        comm_id = comm_name_map.get(name_clean)
+        best_price = 0
+        if comm_id:
+            prices = uex.get_prices_for_item(int(comm_id))
+            buyers_sys = [p for p in prices
+                          if p.get('price_sell', 0) > 0
+                          and p.get('star_system_name') == system_name]
+            if not buyers_sys:
+                buyers_sys = [p for p in prices if p.get('price_sell', 0) > 0]
+            best_price = max((p['price_sell'] for p in buyers_sys), default=0)
+        rev = best_price * order['quantity']
+        total += rev
+        lines.append({
+            'Minerai': order['commodity_name'],
+            'SCU': order['quantity'],
+            'Prix/SCU': f"{best_price:,} aUEC",
+            'Recette estimée': f"{rev:,.0f} aUEC",
+        })
+    return total, lines
+
+def compute_settlement(orders, payer, nb_crew, transport_participates, comm_name_map, system_name):
+    """Calcule qui doit combien à chaque membre pour un lot de bordereaux (stock perso ou fédéral)."""
+    if not orders:
+        return None
+    recette, _lines = estimate_orders_revenue(orders, comm_name_map, system_name)
+    part_fed = recette * 0.20
+    part_transport = recette * 0.15 if transport_participates else 0
+    reste = recette - part_fed - part_transport
+    return {
+        'payer': payer,
+        'recette': recette,
+        'part_federation': part_fed,
+        'part_transport': part_transport,
+        'reste': reste,
+        'salaire_par_joueur': reste / nb_crew if nb_crew > 0 else 0,
+    }
+
+def render_settlement_block(title, settlement):
+    if not settlement:
+        return
+    st.markdown(f"**{title}**")
+    st.caption(f"{settlement['payer']} doit **{settlement['salaire_par_joueur']:,.0f} aUEC** à chaque membre ayant participé.")
+    s1, s2, s3 = st.columns(3)
+    s1.metric("Recette estimée", f"{settlement['recette']:,.0f} aUEC")
+    s2.metric("Part Fédération (20%)", f"{settlement['part_federation']:,.0f} aUEC")
+    s3.metric("Part Transporteurs (15%)", f"{settlement['part_transport']:,.0f} aUEC")
+    s4, s5 = st.columns(2)
+    s4.metric("Reste à partager", f"{settlement['reste']:,.0f} aUEC")
+    s5.metric("Salaire/joueur", f"{settlement['salaire_par_joueur']:,.0f} aUEC")
+
 CAT_MAP = {
     "🌌 Moteurs Quantum (QT Drive)": [22, 86],
     "🛡️ Boucliers (Shields)": [23],
@@ -351,7 +407,7 @@ if selected_page == "🏗️ Raffineries":
                     # --- Rapport financier ---
                     st.markdown("**📊 Rapport financier**")
                     summary = uex.get_session_financial_summary(sess_id)
-                    if not summary['orders_vente'] and not summary['orders_stock_fed']:
+                    if not summary['orders_vente'] and not summary['orders_stock_fed'] and not summary['orders_personnel']:
                         st.caption("Aucun bon de transport rattaché à cette session.")
                     else:
                         # Map nom nettoyé -> id du minerai RAFFINÉ (priorité aux entrées sans suffixe)
@@ -420,6 +476,20 @@ if selected_page == "🏗️ Raffineries":
 
                         if summary['crew']:
                             st.caption(f"Mineurs présents : {', '.join(summary['crew'])}")
+
+                        transport_participates = bool(summary.get('transport_crew'))
+                        personnel_settlement = compute_settlement(
+                            summary.get('orders_personnel', []), summary['session'].get('created_by'),
+                            nb, transport_participates, comm_name_map, system_name,
+                        )
+                        federal_settlement = compute_settlement(
+                            summary['orders_stock_fed'], "Fédération",
+                            nb, transport_participates, comm_name_map, system_name,
+                        )
+                        if personnel_settlement or federal_settlement:
+                            st.divider()
+                        render_settlement_block("💰 Règlement stock personnel", personnel_settlement)
+                        render_settlement_block("🏛️ Règlement stock fédération", federal_settlement)
 
     # --- ONGLET ESTIMATION ---
     with tab_estim:
