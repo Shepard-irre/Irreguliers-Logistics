@@ -472,10 +472,14 @@ if selected_page == "🏗️ Raffineries":
                         g1.metric("Recette globale estimée", f"{sum(s['recette'] for s in settlements):,.0f} aUEC")
                         g2.metric("Participation Fédération", f"{sum(s['part_federation'] for s in settlements):,.0f} aUEC")
                         g3.metric("Part Transporteurs", f"{sum(s['part_transport'] for s in settlements):,.0f} aUEC")
+                        # Frais de session avancés par le créateur — remboursés sur la recette
+                        # globale avant partage, pas déduits d'un règlement individuel.
+                        cout_total_membres = sum(s['reste'] for s in settlements) - total_exp
+                        salaire_global_membre = cout_total_membres / nb if nb > 0 else 0
                         g4, g5, g6 = st.columns(3)
                         g4.metric("Coût d'entretien", f"{total_exp:,.0f} aUEC")
-                        g5.metric("Coût total membres (hors transport)", f"{sum(s['reste'] for s in settlements):,.0f} aUEC")
-                        g6.metric("Salaire global d'un membre", f"{sum(s['salaire_par_joueur'] for s in settlements):,.0f} aUEC")
+                        g5.metric("Coût total membres (hors transport)", f"{cout_total_membres:,.0f} aUEC")
+                        g6.metric("Salaire global d'un membre", f"{salaire_global_membre:,.0f} aUEC")
 
                         render_settlement_block("💰 Règlement stock personnel", personnel_settlement, kind='personnel')
                         render_settlement_block("🏛️ Règlement stock fédération", federal_settlement, kind='federal')

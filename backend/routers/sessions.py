@@ -222,13 +222,17 @@ def financial_summary(
     )
 
     settlements = [s for s in (vente_settlement, personnel_settlement, federal_settlement) if s]
+    # Les frais de session (carburant, réparations) sont avancés par le créateur de la
+    # session — ils doivent être remboursés sur la recette globale avant le partage entre
+    # membres, pas déduits d'un règlement individuel (sinon il les paierait deux fois).
+    cout_total_membres = sum(s["reste"] for s in settlements) - total_exp
     recap_global = {
         "recette_globale": sum(s["recette"] for s in settlements),
         "participation_federation": sum(s["part_federation"] for s in settlements),
         "part_transporteurs": sum(s["part_transport"] for s in settlements),
         "cout_entretien": total_exp,
-        "cout_total_membres": sum(s["reste"] for s in settlements),
-        "salaire_global_membre": sum(s["salaire_par_joueur"] for s in settlements),
+        "cout_total_membres": cout_total_membres,
+        "salaire_global_membre": cout_total_membres / nb if nb > 0 else 0,
     }
 
     return {

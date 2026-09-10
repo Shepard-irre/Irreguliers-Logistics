@@ -146,8 +146,11 @@ def test_remove_expense(fake_uex, client):
 
 
 def test_financial_summary_vente_settlement_not_charged_ship_maintenance(fake_uex, client):
-    """Session expenses (frais d'entretien) are mining-ship costs — they must not be
-    deducted from the transporters' vente settlement (they'll get their own tool for that)."""
+    """Session expenses (frais d'entretien) are mining-ship costs the session creator
+    fronted out of pocket (fuel, repairs) — they must not be deducted from the
+    transporters' vente settlement (they'll get their own tool for that), but they
+    DO need to come off the top of recap_global so that money gets reimbursed before
+    the remaining pot is split among the crew."""
     fake_uex.get_session_financial_summary.return_value = {
         "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
         "crew": ["Shepard40", "Darkias"],
@@ -188,8 +191,8 @@ def test_financial_summary_vente_settlement_not_charged_ship_maintenance(fake_ue
         "participation_federation": 1000,
         "part_transporteurs": 750,
         "cout_entretien": 1000,
-        "cout_total_membres": 3250,
-        "salaire_global_membre": 1625,
+        "cout_total_membres": 2250,
+        "salaire_global_membre": 1125,
     }
 
 
