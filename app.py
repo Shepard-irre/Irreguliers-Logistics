@@ -185,27 +185,35 @@ def compute_settlement(orders, payer, nb_crew, transport_participates, comm_name
         'lines': lines,
     }
 
-def render_settlement_block(title, settlement):
+def render_settlement_block(title, settlement, kind):
+    """kind: 'personnel' | 'federal' | 'vente' — détermine quelles lignes "doit payer" afficher
+    (on ne montre jamais qu'une partie se doit de l'argent à elle-même)."""
     if not settlement:
         return
+    owes_federation = kind != 'federal'
+    owes_transport = kind != 'vente' and settlement['part_transport'] > 0
+    keeps_transport = kind == 'vente' and settlement['part_transport'] > 0
+
     st.divider()
     st.markdown(f"**{title}**")
-    st.caption(f"{settlement['payer']} doit **{settlement['salaire_par_joueur']:,.0f} aUEC** à chaque membre ayant participé.")
+    st.caption(f"{settlement['payer']} — recette estimée **{settlement['recette']:,.0f} aUEC**")
     if settlement['lines']:
         st.dataframe(pd.DataFrame(settlement['lines']), use_container_width=True, hide_index=True)
-    s1, s2, s3 = st.columns(3)
-    s1.metric("Recette estimée", f"{settlement['recette']:,.0f} aUEC")
-    s2.metric("Part Fédération (20%)", f"{settlement['part_federation']:,.0f} aUEC")
-    s3.metric("Part Transporteurs (15%)", f"{settlement['part_transport']:,.0f} aUEC")
+
+    tiles = []
+    if owes_federation:
+        tiles.append((f"{settlement['payer']} doit à la Fédération", settlement['part_federation']))
+    if owes_transport:
+        tiles.append((f"{settlement['payer']} doit aux Transporteurs", settlement['part_transport']))
+    if keeps_transport:
+        tiles.append(("Leur part (gardée)", settlement['part_transport']))
     if settlement['expenses'] > 0:
-        s4, s5, s6 = st.columns(3)
-        s4.metric("Frais vaisseaux", f"{settlement['expenses']:,.0f} aUEC")
-        s5.metric("Reste à partager", f"{settlement['reste']:,.0f} aUEC")
-        s6.metric("Salaire/joueur", f"{settlement['salaire_par_joueur']:,.0f} aUEC")
-    else:
-        s4, s5 = st.columns(2)
-        s4.metric("Reste à partager", f"{settlement['reste']:,.0f} aUEC")
-        s5.metric("Salaire/joueur", f"{settlement['salaire_par_joueur']:,.0f} aUEC")
+        tiles.append(("Frais vaisseaux", settlement['expenses']))
+    tiles.append((f"{settlement['payer']} doit à chaque autre participant", settlement['salaire_par_joueur']))
+
+    cols = st.columns(len(tiles))
+    for col, (label, value) in zip(cols, tiles):
+        col.metric(label, f"{value:,.0f} aUEC")
 
 CAT_MAP = {
     "🌌 Moteurs Quantum (QT Drive)": [22, 86],
@@ -458,14 +466,20 @@ if selected_page == "🏗️ Raffineries":
                             summary['orders_stock_fed'], "Fédération",
                             nb, transport_participates, comm_name_map, system_name,
                         )
-                        salaire_total_mineur = sum(
-                            s['salaire_par_joueur'] for s in (vente_settlement, personnel_settlement, federal_settlement) if s
-                        )
-                        st.metric("💎 Salaire total du mineur", f"{salaire_total_mineur:,.0f} aUEC")
+                        settlements = [s for s in (vente_settlement, personnel_settlement, federal_settlement) if s]
+                        st.markdown("**📋 Récapitulatif global**")
+                        g1, g2, g3 = st.columns(3)
+                        g1.metric("Recette globale estimée", f"{sum(s['recette'] for s in settlements):,.0f} aUEC")
+                        g2.metric("Participation Fédération", f"{sum(s['part_federation'] for s in settlements):,.0f} aUEC")
+                        g3.metric("Part Transporteurs", f"{sum(s['part_transport'] for s in settlements):,.0f} aUEC")
+                        g4, g5, g6 = st.columns(3)
+                        g4.metric("Coût d'entretien", f"{total_exp:,.0f} aUEC")
+                        g5.metric("Coût total membres (hors transport)", f"{sum(s['reste'] for s in settlements):,.0f} aUEC")
+                        g6.metric("Salaire global d'un membre", f"{sum(s['salaire_par_joueur'] for s in settlements):,.0f} aUEC")
 
-                        render_settlement_block("🚀 Règlement vente", vente_settlement)
-                        render_settlement_block("💰 Règlement stock personnel", personnel_settlement)
-                        render_settlement_block("🏛️ Règlement stock fédération", federal_settlement)
+                        render_settlement_block("💰 Règlement stock personnel", personnel_settlement, kind='personnel')
+                        render_settlement_block("🏛️ Règlement stock fédération", federal_settlement, kind='federal')
+                        render_settlement_block("🚀 Règlement vente", vente_settlement, kind='vente')
 
     # --- ONGLET ESTIMATION ---
     with tab_estim:

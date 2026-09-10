@@ -181,10 +181,17 @@ def test_financial_summary_vente_settlement_owed_by_transporters(fake_uex, clien
     }
     assert body["personnel_settlement"] is None
     assert body["federal_settlement"] is None
-    assert body["salaire_total_mineur"] == 750
+    assert body["recap_global"] == {
+        "recette_globale": 5000,
+        "participation_federation": 1000,
+        "part_transporteurs": 750,
+        "cout_entretien": 1000,
+        "cout_total_membres": 2250,
+        "salaire_global_membre": 750,
+    }
 
 
-def test_financial_summary_salaire_total_mineur_sums_all_three_settlements(fake_uex, client):
+def test_financial_summary_recap_global_sums_all_three_settlements(fake_uex, client):
     fake_uex.get_session_financial_summary.return_value = {
         "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
         "crew": ["Shepard40", "Darkias"],
@@ -203,13 +210,14 @@ def test_financial_summary_salaire_total_mineur_sums_all_three_settlements(fake_
 
     assert resp.status_code == 200
     body = resp.json()
-    expected_total = (
-        body["vente_settlement"]["salaire_par_joueur"]
-        + body["personnel_settlement"]["salaire_par_joueur"]
-        + body["federal_settlement"]["salaire_par_joueur"]
-    )
-    assert body["salaire_total_mineur"] == expected_total
-    assert expected_total == 1625 * 3
+    assert body["recap_global"] == {
+        "recette_globale": 15000,
+        "participation_federation": 3000,
+        "part_transporteurs": 2250,
+        "cout_entretien": 0,
+        "cout_total_membres": 9750,
+        "salaire_global_membre": 4875,
+    }
 
 
 def test_financial_summary_computes_personnel_settlement(fake_uex, client):

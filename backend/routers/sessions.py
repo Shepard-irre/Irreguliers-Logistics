@@ -221,9 +221,15 @@ def financial_summary(
         nb, transport_participates, comm_name_map, system_name, uex,
     )
 
-    salaire_total_mineur = sum(
-        s["salaire_par_joueur"] for s in (vente_settlement, personnel_settlement, federal_settlement) if s
-    )
+    settlements = [s for s in (vente_settlement, personnel_settlement, federal_settlement) if s]
+    recap_global = {
+        "recette_globale": sum(s["recette"] for s in settlements),
+        "participation_federation": sum(s["part_federation"] for s in settlements),
+        "part_transporteurs": sum(s["part_transport"] for s in settlements),
+        "cout_entretien": total_exp,
+        "cout_total_membres": sum(s["reste"] for s in settlements),
+        "salaire_global_membre": sum(s["salaire_par_joueur"] for s in settlements),
+    }
 
     return {
         "total_expenses": total_exp,
@@ -233,5 +239,5 @@ def financial_summary(
         "vente_settlement": vente_settlement,
         "personnel_settlement": personnel_settlement,
         "federal_settlement": federal_settlement,
-        "salaire_total_mineur": salaire_total_mineur,
+        "recap_global": recap_global,
     }

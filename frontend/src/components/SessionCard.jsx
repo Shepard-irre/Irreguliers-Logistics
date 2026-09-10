@@ -255,17 +255,20 @@ export default function SessionCard({ session, onChanged }) {
                       {summary.crew.length > 0 && (
                         <div className="text-xs text-irr-dim">Mineurs présents : {summary.crew.join(', ')}</div>
                       )}
-                      <div className="bg-irr-accent-dim border border-irr-accent p-3 flex items-center justify-between">
-                        <span className="text-[10px] font-display font-semibold tracking-[0.14em] uppercase text-irr-accent">
-                          Salaire total du mineur
-                        </span>
-                        <span className="font-mono font-bold text-irr-accent text-lg">
-                          {fmtAuec(summary.salaire_total_mineur)}
-                        </span>
+                      <span className="text-[10px] font-display font-semibold tracking-[0.14em] uppercase text-irr-dim">
+                        Récapitulatif global
+                      </span>
+                      <div className="grid grid-cols-3 gap-3 text-sm">
+                        <FinTile label="Recette globale estimée" value={fmtAuec(summary.recap_global.recette_globale)} />
+                        <FinTile label="Participation Fédération" value={fmtAuec(summary.recap_global.participation_federation)} />
+                        <FinTile label="Part Transporteurs" value={fmtAuec(summary.recap_global.part_transporteurs)} />
+                        <FinTile label="Coût d'entretien" value={fmtAuec(summary.recap_global.cout_entretien)} />
+                        <FinTile label="Coût total membres (hors transport)" value={fmtAuec(summary.recap_global.cout_total_membres)} />
+                        <FinTile label="Salaire global d'un membre" value={fmtAuec(summary.recap_global.salaire_global_membre)} accent />
                       </div>
-                      <SettlementBlock title="Règlement vente" settlement={summary.vente_settlement} />
-                      <SettlementBlock title="Règlement stock personnel" settlement={summary.personnel_settlement} />
-                      <SettlementBlock title="Règlement stock fédération" settlement={summary.federal_settlement} />
+                      <SettlementBlock title="Règlement stock personnel" settlement={summary.personnel_settlement} kind="personnel" />
+                      <SettlementBlock title="Règlement stock fédération" settlement={summary.federal_settlement} kind="federal" />
+                      <SettlementBlock title="Règlement vente" settlement={summary.vente_settlement} kind="vente" />
                     </>
                   )}
                 </div>
@@ -278,24 +281,37 @@ export default function SessionCard({ session, onChanged }) {
   )
 }
 
-function SettlementBlock({ title, settlement }) {
+function SettlementBlock({ title, settlement, kind }) {
   if (!settlement) return null
+  const owesFederation = kind !== 'federal'
+  const owesTransport = kind !== 'vente' && settlement.part_transport > 0
+  const keepsTransport = kind === 'vente' && settlement.part_transport > 0
+
   return (
     <div className="flex flex-col gap-3 border-t border-irr-border pt-4">
       <span className="text-[10px] font-display font-semibold tracking-[0.14em] uppercase text-irr-dim">
         {title}
       </span>
       <div className="text-xs text-irr-text">
-        <span className="text-irr-accent font-semibold">{settlement.payer}</span> doit{' '}
-        <span className="font-mono font-semibold">{fmtAuec(settlement.salaire_par_joueur)}</span> à chaque membre ayant participé.
+        <span className="text-irr-accent font-semibold">{settlement.payer}</span> — recette estimée{' '}
+        <span className="font-mono font-semibold">{fmtAuec(settlement.recette)}</span>
       </div>
       <div className="grid grid-cols-3 gap-3 text-sm">
-        <FinTile label="Recette estimée" value={fmtAuec(settlement.recette)} />
-        <FinTile label="Part Fédération (20%)" value={fmtAuec(settlement.part_federation)} />
-        <FinTile label="Part Transport (15%)" value={fmtAuec(settlement.part_transport)} />
+        {owesFederation && (
+          <FinTile label={`${settlement.payer} doit à la Fédération`} value={fmtAuec(settlement.part_federation)} />
+        )}
+        {owesTransport && (
+          <FinTile label={`${settlement.payer} doit aux Transporteurs`} value={fmtAuec(settlement.part_transport)} />
+        )}
+        {keepsTransport && (
+          <FinTile label="Leur part (gardée)" value={fmtAuec(settlement.part_transport)} />
+        )}
         {settlement.expenses > 0 && <FinTile label="Frais vaisseaux" value={fmtAuec(settlement.expenses)} />}
-        <FinTile label="Reste à partager" value={fmtAuec(settlement.reste)} />
-        <FinTile label="Salaire/joueur" value={fmtAuec(settlement.salaire_par_joueur)} accent />
+        <FinTile
+          label={`${settlement.payer} doit à chaque autre participant`}
+          value={fmtAuec(settlement.salaire_par_joueur)}
+          accent
+        />
       </div>
     </div>
   )
