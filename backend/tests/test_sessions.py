@@ -145,11 +145,13 @@ def test_remove_expense(fake_uex, client):
     fake_uex.remove_session_expense.assert_called_once_with(6)
 
 
-def test_financial_summary_vente_settlement_owed_by_transporters(fake_uex, client):
+def test_financial_summary_vente_settlement_not_charged_ship_maintenance(fake_uex, client):
+    """Session expenses (frais d'entretien) are mining-ship costs — they must not be
+    deducted from the transporters' vente settlement (they'll get their own tool for that)."""
     fake_uex.get_session_financial_summary.return_value = {
         "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
-        "crew": ["Shepard40", "Darkias", "Camus68"],
-        "nb_joueurs": 3,
+        "crew": ["Shepard40", "Darkias"],
+        "nb_joueurs": 2,
         "transport_crew": ["Nispi1"],
         "expenses": [{"description": "Carburant", "amount_auec": 1000}],
         "total_expenses": 1000,
@@ -172,9 +174,9 @@ def test_financial_summary_vente_settlement_owed_by_transporters(fake_uex, clien
         "recette": 5000,
         "part_federation": 1000,
         "part_transport": 750,
-        "expenses": 1000,
-        "reste": 2250,
-        "salaire_par_joueur": 750,
+        "expenses": 0,
+        "reste": 3250,
+        "salaire_par_joueur": 1625,
         "lines": [
             {"commodity_name": "Quantainium", "quantity": 100, "price_per_scu": 50, "estimated_revenue": 5000}
         ],
@@ -186,8 +188,8 @@ def test_financial_summary_vente_settlement_owed_by_transporters(fake_uex, clien
         "participation_federation": 1000,
         "part_transporteurs": 750,
         "cout_entretien": 1000,
-        "cout_total_membres": 2250,
-        "salaire_global_membre": 750,
+        "cout_total_membres": 3250,
+        "salaire_global_membre": 1625,
     }
 
 

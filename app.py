@@ -456,7 +456,7 @@ if selected_page == "🏗️ Raffineries":
                         transport_participates = bool(summary.get('transport_crew'))
                         vente_settlement = compute_settlement(
                             summary['orders_vente'], "Transporteurs",
-                            nb, transport_participates, comm_name_map, system_name, expenses=total_exp,
+                            nb, transport_participates, comm_name_map, system_name,
                         )
                         personnel_settlement = compute_settlement(
                             summary.get('orders_personnel', []), summary['session'].get('created_by'),

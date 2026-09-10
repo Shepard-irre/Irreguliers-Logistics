@@ -210,7 +210,7 @@ def financial_summary(
 
     vente_settlement = _settlement(
         summary["orders_vente"], "Transporteurs",
-        nb, transport_participates, comm_name_map, system_name, uex, expenses=total_exp,
+        nb, transport_participates, comm_name_map, system_name, uex,
     )
     personnel_settlement = _settlement(
         summary.get("orders_personnel", []), summary["session"].get("created_by"),
