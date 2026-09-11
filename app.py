@@ -426,66 +426,70 @@ if selected_page == "🏗️ Raffineries":
                     st.divider()
 
                     # --- Rapport financier ---
-                    st.markdown("**📊 Rapport financier**")
-                    summary = uex.get_session_financial_summary(sess_id)
-                    if not summary['orders_vente'] and not summary['orders_stock_fed'] and not summary['orders_personnel']:
-                        st.caption("Aucun bon de transport rattaché à cette session.")
-                    else:
-                        # Map nom nettoyé -> id du minerai RAFFINÉ (priorité aux entrées sans suffixe)
-                        # Les IDs en DB sont ceux du brut (ex: Stileron Raw id=162) sans prix
-                        # Il faut mapper vers le raffiné (ex: Stileron id=122) qui lui a des prix
-                        all_comms = fetch_commodities() or []
-                        comm_name_map = {}
-                        for c in all_comms:
-                            name = c.get('name', '')
-                            name_lower = name.lower()
-                            clean = name_lower.replace(' (ore)', '').replace(' (raw)', '').strip()
-                            if clean == name_lower:
-                                # Entrée sans suffixe = minerai raffiné → priorité absolue
-                                comm_name_map[clean] = c.get('id')
-                            else:
-                                # Entrée brute → seulement si pas déjà mappé par le raffiné
-                                if clean not in comm_name_map:
+                    # Temporaire : visible seulement par Yann et Darkias, en attendant
+                    # une vraie permission dédiée (le reste de l'équipe ne doit pas le voir).
+                    FINANCIAL_SUMMARY_ALLOWED_USERS = {"Shepard40", "Darkias"}
+                    if user['username'] in FINANCIAL_SUMMARY_ALLOWED_USERS:
+                        st.markdown("**📊 Rapport financier**")
+                        summary = uex.get_session_financial_summary(sess_id)
+                        if not summary['orders_vente'] and not summary['orders_stock_fed'] and not summary['orders_personnel']:
+                            st.caption("Aucun bon de transport rattaché à cette session.")
+                        else:
+                            # Map nom nettoyé -> id du minerai RAFFINÉ (priorité aux entrées sans suffixe)
+                            # Les IDs en DB sont ceux du brut (ex: Stileron Raw id=162) sans prix
+                            # Il faut mapper vers le raffiné (ex: Stileron id=122) qui lui a des prix
+                            all_comms = fetch_commodities() or []
+                            comm_name_map = {}
+                            for c in all_comms:
+                                name = c.get('name', '')
+                                name_lower = name.lower()
+                                clean = name_lower.replace(' (ore)', '').replace(' (raw)', '').strip()
+                                if clean == name_lower:
+                                    # Entrée sans suffixe = minerai raffiné → priorité absolue
                                     comm_name_map[clean] = c.get('id')
+                                else:
+                                    # Entrée brute → seulement si pas déjà mappé par le raffiné
+                                    if clean not in comm_name_map:
+                                        comm_name_map[clean] = c.get('id')
 
-                        system_name = detail['star_system']
-                        nb = summary['nb_joueurs']
-                        total_exp = summary['total_expenses']
+                            system_name = detail['star_system']
+                            nb = summary['nb_joueurs']
+                            total_exp = summary['total_expenses']
 
-                        if summary['crew']:
-                            st.caption(f"Mineurs présents : {', '.join(summary['crew'])}")
+                            if summary['crew']:
+                                st.caption(f"Mineurs présents : {', '.join(summary['crew'])}")
 
-                        transport_participates = bool(summary.get('transport_crew'))
-                        vente_settlement = compute_settlement(
-                            summary['orders_vente'], "Transporteurs",
-                            nb, transport_participates, comm_name_map, system_name,
-                        )
-                        personnel_settlement = compute_settlement(
-                            summary.get('orders_personnel', []), summary['session'].get('created_by'),
-                            nb, transport_participates, comm_name_map, system_name,
-                        )
-                        federal_settlement = compute_settlement(
-                            summary['orders_stock_fed'], "Fédération",
-                            nb, transport_participates, comm_name_map, system_name,
-                        )
-                        settlements = [s for s in (vente_settlement, personnel_settlement, federal_settlement) if s]
-                        st.markdown("**📋 Récapitulatif global**")
-                        g1, g2, g3 = st.columns(3)
-                        g1.metric("Recette globale estimée", f"{sum(s['recette'] for s in settlements):,.0f} aUEC")
-                        g2.metric("Participation Fédération", f"{sum(s['part_federation'] for s in settlements):,.0f} aUEC")
-                        g3.metric("Part Transporteurs", f"{sum(s['part_transport'] for s in settlements):,.0f} aUEC")
-                        # Frais de session avancés par le créateur — remboursés sur la recette
-                        # globale avant partage, pas déduits d'un règlement individuel.
-                        cout_total_membres = sum(s['reste'] for s in settlements) - total_exp
-                        salaire_global_membre = cout_total_membres / nb if nb > 0 else 0
-                        g4, g5, g6 = st.columns(3)
-                        g4.metric("Coût d'entretien", f"{total_exp:,.0f} aUEC")
-                        g5.metric("Coût total membres (hors transport)", f"{cout_total_membres:,.0f} aUEC")
-                        g6.metric("Salaire global d'un membre", f"{salaire_global_membre:,.0f} aUEC")
+                            transport_participates = bool(summary.get('transport_crew'))
+                            vente_settlement = compute_settlement(
+                                summary['orders_vente'], "Transporteurs",
+                                nb, transport_participates, comm_name_map, system_name,
+                            )
+                            personnel_settlement = compute_settlement(
+                                summary.get('orders_personnel', []), summary['session'].get('created_by'),
+                                nb, transport_participates, comm_name_map, system_name,
+                            )
+                            federal_settlement = compute_settlement(
+                                summary['orders_stock_fed'], "Fédération",
+                                nb, transport_participates, comm_name_map, system_name,
+                            )
+                            settlements = [s for s in (vente_settlement, personnel_settlement, federal_settlement) if s]
+                            st.markdown("**📋 Récapitulatif global**")
+                            g1, g2, g3 = st.columns(3)
+                            g1.metric("Recette globale estimée", f"{sum(s['recette'] for s in settlements):,.0f} aUEC")
+                            g2.metric("Participation Fédération", f"{sum(s['part_federation'] for s in settlements):,.0f} aUEC")
+                            g3.metric("Part Transporteurs", f"{sum(s['part_transport'] for s in settlements):,.0f} aUEC")
+                            # Frais de session avancés par le créateur — remboursés sur la recette
+                            # globale avant partage, pas déduits d'un règlement individuel.
+                            cout_total_membres = sum(s['reste'] for s in settlements) - total_exp
+                            salaire_global_membre = cout_total_membres / nb if nb > 0 else 0
+                            g4, g5, g6 = st.columns(3)
+                            g4.metric("Coût d'entretien", f"{total_exp:,.0f} aUEC")
+                            g5.metric("Coût total membres (hors transport)", f"{cout_total_membres:,.0f} aUEC")
+                            g6.metric("Salaire global d'un membre", f"{salaire_global_membre:,.0f} aUEC")
 
-                        render_settlement_block("💰 Règlement stock personnel", personnel_settlement, kind='personnel')
-                        render_settlement_block("🏛️ Règlement stock fédération", federal_settlement, kind='federal')
-                        render_settlement_block("🚀 Règlement vente", vente_settlement, kind='vente')
+                            render_settlement_block("💰 Règlement stock personnel", personnel_settlement, kind='personnel')
+                            render_settlement_block("🏛️ Règlement stock fédération", federal_settlement, kind='federal')
+                            render_settlement_block("🚀 Règlement vente", vente_settlement, kind='vente')
 
     # --- ONGLET ESTIMATION ---
     with tab_estim:

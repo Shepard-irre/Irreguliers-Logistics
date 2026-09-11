@@ -44,11 +44,17 @@ export default function SessionCard({ session, onChanged, members = [] }) {
   async function load() {
     setError(null)
     try {
-      const [d, s] = await Promise.all([getSessionDetail(session.id), getSessionFinancialSummary(session.id)])
-      setDetail(d)
-      setSummary(s)
+      setDetail(await getSessionDetail(session.id))
     } catch (e) {
       setError(e.message)
+      return
+    }
+    try {
+      setSummary(await getSessionFinancialSummary(session.id))
+    } catch {
+      // 403 for users outside the financial-report allowlist — the rest of the
+      // session (ships, crew, expenses) still loaded fine, just hide that section.
+      setSummary(null)
     }
   }
 

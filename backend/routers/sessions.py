@@ -203,12 +203,20 @@ def remove_expense(
     return {"ok": True}
 
 
+# Temporaire : le rapport financier n'est visible que par Yann et Darkias, en
+# attendant une vraie permission dédiée (le reste de l'équipe ne doit pas le voir).
+FINANCIAL_SUMMARY_ALLOWED_USERS = {"Shepard40", "Darkias"}
+
+
 @router.get("/{session_id}/financial-summary")
 def financial_summary(
     session_id: int,
     user: dict = Depends(require_permission("page_raffineries")),
     uex=Depends(get_uex),
 ):
+    if user["username"] not in FINANCIAL_SUMMARY_ALLOWED_USERS:
+        raise HTTPException(status_code=403, detail="Accès refusé")
+
     summary = uex.get_session_financial_summary(session_id)
     if summary is None:
         raise HTTPException(status_code=404, detail="Session introuvable")

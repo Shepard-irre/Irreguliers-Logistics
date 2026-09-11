@@ -386,3 +386,32 @@ def test_financial_summary_404_when_session_missing(fake_uex, client):
     resp = client.get("/raffineries/sessions/999/financial-summary")
 
     assert resp.status_code == 404
+
+
+def test_financial_summary_forbidden_for_users_outside_allowlist(fake_uex, client_as):
+    # Temporary: financial data is restricted to Shepard40 (Yann) and Darkias until
+    # a proper role-based permission exists for it.
+    other_user = {"sub": "9", "username": "Nispi1", "permissions": ["page_raffineries"]}
+    fake_uex.get_session_financial_summary.return_value = {
+        "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
+        "crew": [], "nb_joueurs": 0, "transport_crew": [],
+        "expenses": [], "total_expenses": 0,
+        "orders_vente": [], "orders_stock_fed": [], "orders_personnel": [],
+    }
+
+    resp = client_as(other_user).get("/raffineries/sessions/4/financial-summary")
+
+    assert resp.status_code == 403
+
+
+def test_financial_summary_allowed_for_darkias(fake_uex, client_as):
+    fake_uex.get_session_financial_summary.return_value = {
+        "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
+        "crew": [], "nb_joueurs": 0, "transport_crew": [],
+        "expenses": [], "total_expenses": 0,
+        "orders_vente": [], "orders_stock_fed": [], "orders_personnel": [],
+    }
+
+    resp = client_as(ADMIN_USER).get("/raffineries/sessions/4/financial-summary")
+
+    assert resp.status_code == 200
