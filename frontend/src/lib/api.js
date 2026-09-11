@@ -58,6 +58,13 @@ export function login(username, password) {
   })
 }
 
+export function sso(token) {
+  return request('/auth/sso', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  })
+}
+
 export function getRaffineriesJobs() {
   return request('/raffineries/jobs')
 }
