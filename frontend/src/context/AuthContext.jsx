@@ -5,19 +5,24 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => getStoredUser())
+  const [ssoError, setSsoError] = useState(null)
 
   useEffect(() => {
     if (user) return
     const params = new URLSearchParams(window.location.search)
     const token = params.get('token')
     if (!token) return
-    apiSso(token).then((data) => {
-      storeSession(data.access_token, data.user)
-      setUser(data.user)
-      params.delete('token')
-      const rest = params.toString()
-      window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''))
-    })
+    apiSso(token)
+      .then((data) => {
+        storeSession(data.access_token, data.user)
+        setUser(data.user)
+        params.delete('token')
+        const rest = params.toString()
+        window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''))
+      })
+      .catch((err) => {
+        setSsoError(err.message || 'Connexion SSO impossible')
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -33,7 +38,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, ssoError }}>
       {children}
     </AuthContext.Provider>
   )

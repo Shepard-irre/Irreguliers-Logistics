@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, ssoError } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
@@ -33,6 +33,10 @@ export default function Login() {
             Console Fédérale
           </div>
         </div>
+
+        {ssoError && (
+          <div className="text-red-400 text-xs">Échec de la connexion automatique : {ssoError}</div>
+        )}
 
         <label className="flex flex-col gap-1">
           <span className="text-[10px] font-display font-semibold tracking-[0.14em] uppercase text-irr-dim">

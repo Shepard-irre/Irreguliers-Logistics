@@ -13,8 +13,13 @@ import { sso } from '../lib/api'
 import { AuthProvider, useAuth } from './AuthContext'
 
 function Probe() {
-  const { user } = useAuth()
-  return <div>{user ? user.username : 'anonyme'}</div>
+  const { user, ssoError } = useAuth()
+  return (
+    <div>
+      <div>{user ? user.username : 'anonyme'}</div>
+      {ssoError && <div>{ssoError}</div>}
+    </div>
+  )
 }
 
 beforeEach(() => {
@@ -48,6 +53,20 @@ describe('AuthContext — SSO via token en URL', () => {
 
     await screen.findByText('Shepard40')
     expect(window.location.search).toBe('')
+  })
+
+  it('affiche une erreur exploitable quand le SSO échoue au lieu de retomber silencieusement sur le login', async () => {
+    window.history.pushState({}, '', '/?token=abc123')
+    sso.mockRejectedValue(new Error('Token SSO invalide'))
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText('Token SSO invalide')).toBeInTheDocument()
+    expect(screen.getByText('anonyme')).toBeInTheDocument()
   })
 
   it('ne fait rien sans token dans l\'URL', async () => {
