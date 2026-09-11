@@ -89,6 +89,14 @@ def list_sessions(
     return records_without_nan(uex.get_mining_sessions(participant=None if is_admin else user["username"]))
 
 
+@router.get("/members")
+def list_members(
+    user: dict = Depends(require_permission("page_raffineries")),
+    uex=Depends(get_uex),
+):
+    return uex.get_wp_members()
+
+
 @router.get("/{session_id}")
 def get_session(
     session_id: int,
@@ -98,6 +106,18 @@ def get_session(
     session = uex.get_mining_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session introuvable")
+
+    is_admin = "admin_panel" in user.get("permissions", [])
+    if not is_admin:
+        is_creator = session.get("created_by") == user["username"]
+        is_crew = any(
+            c.get("username") == user["username"]
+            for ship in session.get("ships", [])
+            for c in ship.get("crew", [])
+        )
+        if not (is_creator or is_crew):
+            raise HTTPException(status_code=404, detail="Session introuvable")
+
     return session
 
 

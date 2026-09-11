@@ -1,4 +1,5 @@
 import sqlite3
+from unittest.mock import MagicMock
 
 from uex_library import UEXManager
 
@@ -33,6 +34,26 @@ def test_get_mining_sessions_filtered_by_participant_sees_own_and_crewed_session
     sessions = mgr.get_mining_sessions(participant='Darkias')
 
     assert sorted(s['numero'] for s in sessions.to_dict('records')) == ['MIN002']
+
+
+def test_get_wp_members_delegates_to_wp_auth(monkeypatch):
+    import uex_library
+    fake_wp_auth = MagicMock()
+    fake_wp_auth.get_members.return_value = [{"username": "Darkias", "display_name": "Darkias"}]
+    monkeypatch.setattr(uex_library, "_wp_auth", fake_wp_auth)
+
+    mgr = UEXManager()
+
+    assert mgr.get_wp_members() == [{"username": "Darkias", "display_name": "Darkias"}]
+
+
+def test_get_wp_members_returns_empty_list_without_wp_auth(monkeypatch):
+    import uex_library
+    monkeypatch.setattr(uex_library, "_wp_auth", None)
+
+    mgr = UEXManager()
+
+    assert mgr.get_wp_members() == []
 
 
 def test_headers_include_browser_user_agent():

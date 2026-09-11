@@ -217,6 +217,24 @@ class WPAuth:
         except Exception as e:
             return None
 
+    def get_members(self):
+        """Liste des comptes WP (username, display_name), pour l'autocomplétion.
+        Appel serveur-à-serveur protégé par IRR_JWT_SECRET (pas de session navigateur)."""
+        secret = os.getenv('IRR_JWT_SECRET', '')
+        if not secret:
+            return []
+        try:
+            resp = requests.get(
+                f"{self.wp_url}/wp-json/irr/v1/members",
+                headers={"X-Irr-Api-Key": secret},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                return []
+            return resp.json()
+        except Exception:
+            return []
+
     def authenticate_with_token(self, token):
         """
         Valide un JWT SSO généré par irr/v1/sso-token.

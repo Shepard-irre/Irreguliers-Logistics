@@ -967,6 +967,11 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
             return _wp_auth.authenticate_with_token(token)
         return None
 
+    def get_wp_members(self):
+        if _wp_auth:
+            return _wp_auth.get_members()
+        return []
+
     # --- CRAFTING ---
     def get_blueprints_from_api(self, search='', page=1, limit=20):
         """Fetch blueprints from sc-craft.tools (no auth required)"""

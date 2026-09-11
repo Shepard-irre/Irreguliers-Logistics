@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import SessionCard from './SessionCard'
-import { getSessions, createSession } from '../lib/api'
+import { getSessions, createSession, getMembers } from '../lib/api'
 
 const STAR_SYSTEMS = ['Stanton', 'Pyro', 'Nyx']
 
 export default function SessionsTab() {
   const [sessions, setSessions] = useState(null)
+  const [members, setMembers] = useState([])
   const [error, setError] = useState(null)
   const [newSystem, setNewSystem] = useState(STAR_SYSTEMS[0])
 
@@ -19,6 +20,7 @@ export default function SessionsTab() {
 
   useEffect(() => {
     load()
+    getMembers().then(setMembers).catch(() => setMembers([]))
   }, [])
 
   async function handleCreate() {
@@ -57,7 +59,7 @@ export default function SessionsTab() {
 
       <div className="flex flex-col gap-3">
         {(sessions || []).map((s) => (
-          <SessionCard key={s.id} session={s} onChanged={load} />
+          <SessionCard key={s.id} session={s} onChanged={load} members={members} />
         ))}
       </div>
     </div>

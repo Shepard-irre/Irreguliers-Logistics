@@ -102,6 +102,10 @@ export function getSessions() {
   return request('/raffineries/sessions')
 }
 
+export function getMembers() {
+  return request('/raffineries/sessions/members')
+}
+
 export function createSession(starSystem) {
   return request('/raffineries/sessions', {
     method: 'POST',

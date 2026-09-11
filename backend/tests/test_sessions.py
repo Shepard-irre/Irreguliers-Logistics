@@ -44,6 +44,21 @@ def client_as(app):
     return _client_as
 
 
+def test_list_members_for_crew_autocomplete(fake_uex, client):
+    fake_uex.get_wp_members.return_value = [
+        {"username": "Shepard40", "display_name": "Shepard40"},
+        {"username": "Darkias", "display_name": "Darkias"},
+    ]
+
+    resp = client.get("/raffineries/sessions/members")
+
+    assert resp.status_code == 200
+    assert resp.json() == [
+        {"username": "Shepard40", "display_name": "Shepard40"},
+        {"username": "Darkias", "display_name": "Darkias"},
+    ]
+
+
 def test_create_session_calls_uex_with_requester_and_star_system(fake_uex, client):
     fake_uex.create_mining_session.return_value = {"id": 4, "numero": "MIN004"}
 
@@ -95,6 +110,56 @@ def test_get_session_detail_returns_uex_result(fake_uex, client):
     assert resp.status_code == 200
     fake_uex.get_mining_session.assert_called_once_with(4)
     assert resp.json()["numero"] == "MIN004"
+
+
+def test_get_session_detail_404_for_non_participant(fake_uex, client):
+    fake_uex.get_mining_session.return_value = {
+        "id": 4,
+        "numero": "MIN004",
+        "star_system": "Pyro",
+        "status": "open",
+        "created_by": "Camus68",
+        "ships": [{"id": 1, "crew": [{"username": "Nispi1"}]}],
+        "expenses": [],
+        "jobs": [],
+    }
+
+    resp = client.get("/raffineries/sessions/4")
+
+    assert resp.status_code == 404
+
+
+def test_get_session_detail_visible_to_crew_member_not_creator(fake_uex, client):
+    fake_uex.get_mining_session.return_value = {
+        "id": 4,
+        "numero": "MIN004",
+        "star_system": "Pyro",
+        "status": "open",
+        "created_by": "Camus68",
+        "ships": [{"id": 1, "crew": [{"username": "Shepard40"}]}],
+        "expenses": [],
+        "jobs": [],
+    }
+
+    resp = client.get("/raffineries/sessions/4")
+
+    assert resp.status_code == 200
+
+
+def test_get_session_detail_visible_to_admin_regardless(fake_uex, client_as):
+    fake_uex.get_mining_session.return_value = {
+        "id": 4,
+        "numero": "MIN004",
+        "star_system": "Pyro",
+        "status": "open",
+        "created_by": "Camus68",
+        "ships": [],
+        "expenses": [],
+        "jobs": [],
+    }
+    resp = client_as(ADMIN_USER).get("/raffineries/sessions/4")
+
+    assert resp.status_code == 200
 
 
 def test_get_session_detail_404_when_missing(fake_uex, client):

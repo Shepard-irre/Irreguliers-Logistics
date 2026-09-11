@@ -27,7 +27,7 @@ function fmtAuec(n) {
   return `${Math.round(n).toLocaleString('fr-FR')} aUEC`
 }
 
-export default function SessionCard({ session, onChanged }) {
+export default function SessionCard({ session, onChanged, members = [] }) {
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState(null)
   const [summary, setSummary] = useState(null)
@@ -103,6 +103,11 @@ export default function SessionCard({ session, onChanged }) {
 
       {open && (
         <div className="px-6 pb-6 flex flex-col gap-5 border-t border-irr-border pt-5">
+          <datalist id={`irr-members-${session.id}`}>
+            {members.map((m) => (
+              <option key={m.username} value={m.username} />
+            ))}
+          </datalist>
           {error && <div className="text-red-400 text-xs">{error}</div>}
           {!detail ? (
             <div className="text-irr-dim text-sm">Chargement…</div>
@@ -158,6 +163,7 @@ export default function SessionCard({ session, onChanged }) {
                           value={crewInputs[ship.id] || ''}
                           onChange={(e) => setCrewInputs((c) => ({ ...c, [ship.id]: e.target.value }))}
                           placeholder="pseudo du joueur"
+                          list={`irr-members-${session.id}`}
                           className="bg-irr-panel border border-irr-border-strong px-2 py-1 text-xs text-irr-text flex-1 focus:outline-none focus:border-irr-accent"
                         />
                         <button
