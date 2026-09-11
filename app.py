@@ -295,8 +295,10 @@ if selected_page == "🏗️ Raffineries":
                     st.success(f"Session **{s['numero']}** créée !")
                     st.rerun()
 
-        # Liste des sessions
-        sessions_df = uex.get_mining_sessions()
+        # Liste des sessions — restreinte au créateur + équipage, sauf admin
+        sessions_df = uex.get_mining_sessions(
+            participant=None if has_permission("admin_panel") else user['username']
+        )
         if sessions_df.empty:
             st.info("Aucune session de minage.")
         else:
@@ -730,7 +732,10 @@ if selected_page == "🏗️ Raffineries":
             st.divider()
 
             # --- Session rattachée ---
-            open_sessions_df = uex.get_mining_sessions(status='open')
+            open_sessions_df = uex.get_mining_sessions(
+                status='open',
+                participant=None if has_permission("admin_panel") else user['username'],
+            )
             session_options = {"(aucune)": None}
             session_systems = {}
             if not open_sessions_df.empty:

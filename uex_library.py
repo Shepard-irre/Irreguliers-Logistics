@@ -786,13 +786,23 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
             conn.commit()
         return {'id': session_id, 'numero': numero}
 
-    def get_mining_sessions(self, status=None):
+    def get_mining_sessions(self, status=None, participant=None):
         with sqlite3.connect(self.db_path) as conn:
             query = "SELECT * FROM mining_sessions"
+            clauses = []
             params = []
             if status:
-                query += " WHERE status=?"
+                clauses.append("status=?")
                 params.append(status)
+            if participant:
+                clauses.append("""(created_by=? OR id IN (
+                    SELECT ss.session_id FROM session_ships ss
+                    JOIN session_crew sc ON sc.ship_id = ss.id
+                    WHERE sc.username=?
+                ))""")
+                params.extend([participant, participant])
+            if clauses:
+                query += " WHERE " + " AND ".join(clauses)
             query += " ORDER BY id DESC"
             df = pd.read_sql_query(query, conn, params=params)
         return df

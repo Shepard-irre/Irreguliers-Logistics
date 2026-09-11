@@ -10,6 +10,31 @@ def _fresh_manager(tmp_path):
     return mgr
 
 
+def test_get_mining_sessions_filtered_by_participant_sees_own_and_crewed_sessions(tmp_path):
+    mgr = _fresh_manager(tmp_path)
+    with sqlite3.connect(mgr.db_path) as conn:
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO mining_sessions (id, numero, star_system, status, created_by) "
+            "VALUES (1, 'MIN001', 'Stanton', 'open', 'Shepard40')"
+        )
+        c.execute(
+            "INSERT INTO mining_sessions (id, numero, star_system, status, created_by) "
+            "VALUES (2, 'MIN002', 'Pyro', 'open', 'Camus68')"
+        )
+        c.execute(
+            "INSERT INTO mining_sessions (id, numero, star_system, status, created_by) "
+            "VALUES (3, 'MIN003', 'Nyx', 'open', 'Camus68')"
+        )
+        c.execute("INSERT INTO session_ships (id, session_id, ship_name, ship_role) VALUES (1, 2, 'Prospector', 'mining')")
+        c.execute("INSERT INTO session_crew (ship_id, username) VALUES (1, 'Darkias')")
+        conn.commit()
+
+    sessions = mgr.get_mining_sessions(participant='Darkias')
+
+    assert sorted(s['numero'] for s in sessions.to_dict('records')) == ['MIN002']
+
+
 def test_headers_include_browser_user_agent():
     mgr = UEXManager()
     assert "User-Agent" in mgr.headers

@@ -14,6 +14,7 @@ import deps
 from routers import sessions
 
 MINEUR_USER = {"sub": "12", "username": "Shepard40", "permissions": ["page_raffineries"]}
+ADMIN_USER = {"sub": "1", "username": "Darkias", "permissions": ["page_raffineries", "admin_panel"]}
 
 
 @pytest.fixture
@@ -35,6 +36,14 @@ def client(app):
     return TestClient(app)
 
 
+@pytest.fixture
+def client_as(app):
+    def _client_as(user):
+        app.dependency_overrides[auth.get_current_user] = lambda: user
+        return TestClient(app)
+    return _client_as
+
+
 def test_create_session_calls_uex_with_requester_and_star_system(fake_uex, client):
     fake_uex.create_mining_session.return_value = {"id": 4, "numero": "MIN004"}
 
@@ -45,7 +54,7 @@ def test_create_session_calls_uex_with_requester_and_star_system(fake_uex, clien
     assert resp.json() == {"id": 4, "numero": "MIN004"}
 
 
-def test_list_sessions_returns_uex_result_as_records(fake_uex, client):
+def test_list_sessions_scoped_to_own_username_for_non_admin(fake_uex, client):
     fake_uex.get_mining_sessions.return_value = pd.DataFrame(
         [{"id": 4, "numero": "MIN004", "star_system": "Pyro", "status": "open"}]
     )
@@ -53,8 +62,20 @@ def test_list_sessions_returns_uex_result_as_records(fake_uex, client):
     resp = client.get("/raffineries/sessions")
 
     assert resp.status_code == 200
-    fake_uex.get_mining_sessions.assert_called_once_with()
+    fake_uex.get_mining_sessions.assert_called_once_with(participant="Shepard40")
     assert resp.json() == [{"id": 4, "numero": "MIN004", "star_system": "Pyro", "status": "open"}]
+
+
+def test_list_sessions_sees_everyone_for_admin(fake_uex, client_as):
+    fake_uex.get_mining_sessions.return_value = pd.DataFrame(
+        [{"id": 4, "numero": "MIN004", "star_system": "Pyro", "status": "open"}]
+    )
+    client = client_as(ADMIN_USER)
+
+    resp = client.get("/raffineries/sessions")
+
+    assert resp.status_code == 200
+    fake_uex.get_mining_sessions.assert_called_once_with(participant=None)
 
 
 def test_get_session_detail_returns_uex_result(fake_uex, client):

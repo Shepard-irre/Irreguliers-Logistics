@@ -85,7 +85,8 @@ def list_sessions(
     user: dict = Depends(require_permission("page_raffineries")),
     uex=Depends(get_uex),
 ):
-    return records_without_nan(uex.get_mining_sessions())
+    is_admin = "admin_panel" in user.get("permissions", [])
+    return records_without_nan(uex.get_mining_sessions(participant=None if is_admin else user["username"]))
 
 
 @router.get("/{session_id}")
