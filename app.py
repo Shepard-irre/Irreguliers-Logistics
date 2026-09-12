@@ -314,9 +314,13 @@ if selected_page == "🏗️ Raffineries":
                     detail = uex.get_mining_session(sess_id)
 
                     # Statut
-                    col_st, col_close = st.columns([3, 1])
+                    is_responsible = detail['created_by'] == user['username'] or has_permission("admin_panel")
+                    col_st, col_rename, col_close = st.columns([3, 1, 1])
                     with col_st:
                         st.caption(f"Créée par {detail['created_by']} le {detail['date_created'][:10]}")
+                    with col_rename:
+                        if is_responsible and st.button("✎ Renommer", key=f"rename_btn_{sess_id}", use_container_width=True):
+                            st.session_state[f"renaming_{sess_id}"] = True
                     with col_close:
                         if detail['status'] == 'open':
                             if st.button("✅ Clore la session", key=f"close_{sess_id}", use_container_width=True):
@@ -422,6 +426,19 @@ if selected_page == "🏗️ Raffineries":
                                 if exp_desc.strip() and exp_amt > 0:
                                     uex.add_session_expense(sess_id, exp_desc.strip(), exp_amt)
                                     st.rerun()
+
+                    if st.session_state.get(f"renaming_{sess_id}"):
+                        rn1, rn2, rn3 = st.columns([3, 1, 1])
+                        new_numero = rn1.text_input(
+                            "Nouveau nom", value=detail['numero'], key=f"new_numero_{sess_id}", label_visibility="collapsed",
+                        )
+                        if rn2.button("Valider", key=f"rename_ok_{sess_id}", use_container_width=True):
+                            uex.rename_mining_session(sess_id, new_numero.strip())
+                            st.session_state[f"renaming_{sess_id}"] = False
+                            st.rerun()
+                        if rn3.button("Annuler", key=f"rename_cancel_{sess_id}", use_container_width=True):
+                            st.session_state[f"renaming_{sess_id}"] = False
+                            st.rerun()
 
                     st.divider()
 
@@ -749,6 +766,9 @@ if selected_page == "🏗️ Raffineries":
             sel_session_id = session_options[sel_session_label]
             sel_session_system = session_systems.get(sel_session_label)
 
+            if sel_session_id is None:
+                st.warning("Sélectionne une session de minage avant de pouvoir ajouter des lots ou analyser un screenshot.")
+
             st.divider()
 
             # Filtrer les terminaux selon le système de la session
@@ -786,7 +806,7 @@ if selected_page == "🏗️ Raffineries":
             with cd:
                 st.write("")
                 st.write("")
-                if st.button("➕ Ajouter", use_container_width=True):
+                if st.button("➕ Ajouter", use_container_width=True, disabled=(sel_session_id is None)):
                     st.session_state['refinery_lines'].append({
                         'commodity_id': comm_map_ref[sel_comm_name]['id'],
                         'commodity_name': sel_comm_name,
@@ -817,7 +837,7 @@ if selected_page == "🏗️ Raffineries":
                             st.rerun()
 
                 st.divider()
-                if st.button("🔬 Calculer l'estimation pour tous les lots", type="primary", use_container_width=True):
+                if st.button("🔬 Calculer l'estimation pour tous les lots", type="primary", use_container_width=True, disabled=(sel_session_id is None)):
                     sel_terminal = terminal_map[sel_terminal_name]
                     method_code = sel_method_name.lower().replace(' ', '_')
                     estimates = []
@@ -1003,7 +1023,9 @@ if selected_page == "🏗️ Raffineries":
                     # Session associée au job
                     job_session_id = job.get('session_id')
                     if pd.notna(job_session_id) and job_session_id:
-                        st.caption(f"Session : MIN{int(job_session_id):03d}")
+                        job_session = uex.get_mining_session(int(job_session_id))
+                        if job_session:
+                            st.caption(f"Session : {job_session['numero']}")
 
                     pickup_loc = st.text_input(
                         "Lieu de pickup :",

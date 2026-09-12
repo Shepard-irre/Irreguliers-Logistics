@@ -86,6 +86,10 @@ export default function NewJobForm({ onCreated, onClose }) {
   }, [refData, terminals, terminalId, methodName, lineCommodityId])
 
   function handleAddLine() {
+    if (!sessionId) {
+      setError('Sélectionne une session de minage avant d\'ajouter un lot.')
+      return
+    }
     const commodity = refData.commodities.find((c) => String(c.id) === lineCommodityId)
     if (!commodity) return
     if (Number(lineQtyCscu) < 100) {
@@ -222,6 +226,10 @@ export default function NewJobForm({ onCreated, onClose }) {
 
   async function handleAnalyzeScreenshot() {
     if (!screenshotFile) return
+    if (!sessionId) {
+      setError('Sélectionne une session de minage avant d\'analyser un screenshot.')
+      return
+    }
     setVisionBusy(true)
     setError(null)
     try {
@@ -389,7 +397,7 @@ export default function NewJobForm({ onCreated, onClose }) {
           onChange={(e) => setSessionId(e.target.value)}
           className="bg-irr-panel-alt border border-irr-border-strong px-2 py-1.5 text-sm text-irr-text focus:outline-none focus:border-irr-accent"
         >
-          <option value="">(aucune)</option>
+          <option value="">-- Sélectionner une session --</option>
           {refData.sessions.map((s) => (
             <option key={s.id} value={s.id}>
               {s.numero} — {s.star_system}
@@ -397,6 +405,12 @@ export default function NewJobForm({ onCreated, onClose }) {
           ))}
         </select>
       </label>
+
+      {!sessionId && (
+        <div className="text-amber-400 text-xs">
+          Sélectionne une session de minage avant de pouvoir ajouter des lots ou analyser un screenshot.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <label className="flex flex-col gap-1">
@@ -450,7 +464,7 @@ export default function NewJobForm({ onCreated, onClose }) {
           </label>
           <button
             type="button"
-            disabled={!screenshotFile || visionBusy}
+            disabled={!screenshotFile || visionBusy || !sessionId}
             onClick={handleAnalyzeScreenshot}
             className="cut-sm bg-irr-accent-dim border border-irr-accent text-irr-accent font-display font-semibold text-xs tracking-wide px-4 py-2 disabled:opacity-50 shrink-0"
           >
@@ -541,8 +555,9 @@ export default function NewJobForm({ onCreated, onClose }) {
         </div>
         <button
           type="button"
+          disabled={!sessionId}
           onClick={handleAddLine}
-          className="cut-sm self-start bg-irr-accent-dim border border-irr-accent text-irr-accent font-display font-semibold text-xs tracking-wide px-4 py-1.5"
+          className="cut-sm self-start bg-irr-accent-dim border border-irr-accent text-irr-accent font-display font-semibold text-xs tracking-wide px-4 py-1.5 disabled:opacity-50"
         >
           + Ajouter
         </button>

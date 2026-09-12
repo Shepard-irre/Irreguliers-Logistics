@@ -177,6 +177,40 @@ def test_close_session(fake_uex, client):
     fake_uex.set_session_status.assert_called_once_with(4, "completed")
 
 
+def test_rename_session_by_creator(fake_uex, client):
+    fake_uex.get_mining_session.return_value = {"id": 4, "created_by": "Shepard40"}
+
+    resp = client.put("/raffineries/sessions/4/rename", json={"numero": "Session du raid"})
+
+    assert resp.status_code == 200
+    fake_uex.rename_mining_session.assert_called_once_with(4, "Session du raid")
+
+
+def test_rename_session_forbidden_for_non_creator(fake_uex, client):
+    fake_uex.get_mining_session.return_value = {"id": 4, "created_by": "Camus68"}
+
+    resp = client.put("/raffineries/sessions/4/rename", json={"numero": "Session du raid"})
+
+    assert resp.status_code == 403
+    fake_uex.rename_mining_session.assert_not_called()
+
+
+def test_rename_session_allowed_for_admin(fake_uex, client_as):
+    fake_uex.get_mining_session.return_value = {"id": 4, "created_by": "Camus68"}
+
+    resp = client_as(ADMIN_USER).put("/raffineries/sessions/4/rename", json={"numero": "Session du raid"})
+
+    assert resp.status_code == 200
+
+
+def test_rename_session_404_when_missing(fake_uex, client):
+    fake_uex.get_mining_session.return_value = None
+
+    resp = client.put("/raffineries/sessions/999/rename", json={"numero": "x"})
+
+    assert resp.status_code == 404
+
+
 def test_add_ship(fake_uex, client):
     fake_uex.add_session_ship.return_value = 9
 

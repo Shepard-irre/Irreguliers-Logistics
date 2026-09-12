@@ -16,7 +16,12 @@ const REF_DATA = {
   commodities: [{ id: 1, name: 'Quantainium (Raw)' }, { id: 2, name: 'Agricium (Raw)' }],
   terminals: [{ id: 10, name: 'HDMS-Hadley', star_system_name: 'Stanton' }],
   methods: [{ name: 'Cormack' }],
-  sessions: [],
+  sessions: [{ id: 1, numero: 'MIN001', star_system: 'Stanton' }],
+}
+
+async function selectSession(user, label = 'MIN001 — Stanton') {
+  await waitFor(() => expect(screen.getByLabelText('Session de minage')).toBeInTheDocument())
+  await user.selectOptions(screen.getByLabelText('Session de minage'), label)
 }
 
 const REF_DATA_MULTI_SYSTEM = {
@@ -40,6 +45,7 @@ describe('NewJobForm — mode batch', () => {
     render(<NewJobForm onCreated={() => {}} onClose={() => {}} />)
 
     await waitFor(() => expect(screen.getByText('+ Ajouter')).toBeInTheDocument())
+    await selectSession(user)
     await user.click(screen.getByText('+ Ajouter'))
 
     expect(await screen.findByText('Lots à raffiner')).toBeInTheDocument()
@@ -55,6 +61,7 @@ describe('NewJobForm — mode batch', () => {
     render(<NewJobForm onCreated={() => {}} onClose={() => {}} />)
 
     await waitFor(() => expect(screen.getByText('+ Ajouter')).toBeInTheDocument())
+    await selectSession(user)
     await user.click(screen.getByText('+ Ajouter'))
     await screen.findByText('Lots à raffiner')
 
@@ -70,6 +77,7 @@ describe('NewJobForm — mode batch', () => {
     render(<NewJobForm onCreated={() => {}} onClose={() => {}} />)
 
     await waitFor(() => expect(screen.getByText('+ Ajouter')).toBeInTheDocument())
+    await selectSession(user)
     const qtyInput = screen.getByLabelText('Quantité (cSCU)')
     await user.clear(qtyInput)
     await user.type(qtyInput, '40')
@@ -77,6 +85,17 @@ describe('NewJobForm — mode batch', () => {
 
     expect(screen.queryByText('Lots à raffiner')).not.toBeInTheDocument()
     expect(await screen.findByText(/Quantité minimum/)).toBeInTheDocument()
+  })
+
+  it('refuse d\'ajouter un lot ou d\'analyser un screenshot sans session sélectionnée', async () => {
+    getRaffineriesReferenceData.mockResolvedValue(REF_DATA)
+
+    render(<NewJobForm onCreated={() => {}} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText('+ Ajouter')).toBeInTheDocument())
+
+    expect(screen.getByText('+ Ajouter')).toBeDisabled()
+    expect(screen.getByText('Analyser le screenshot')).toBeDisabled()
+    expect(screen.getByText(/Sélectionne une session de minage/)).toBeInTheDocument()
   })
 
   it('importe automatiquement les lots actifs d\'un screenshot TYPE B analysé', async () => {
@@ -94,6 +113,7 @@ describe('NewJobForm — mode batch', () => {
 
     render(<NewJobForm onCreated={() => {}} onClose={() => {}} />)
     await waitFor(() => expect(screen.getByText('+ Ajouter')).toBeInTheDocument())
+    await selectSession(user)
 
     const file = new File(['fake-bytes'], 'shot.png', { type: 'image/png' })
     const fileInput = screen.getByLabelText('Screenshot raffinerie')
@@ -118,7 +138,8 @@ describe('NewJobForm — mode batch', () => {
     render(<NewJobForm onCreated={() => {}} onClose={() => {}} />)
     await waitFor(() => expect(screen.getByText('+ Ajouter')).toBeInTheDocument())
 
-    // Terminal auto-selects HDMS-Hadley (Stanton) since no session is picked yet.
+    // Terminal auto-selects HDMS-Hadley (Stanton) once the Stanton session is picked.
+    await selectSession(user, 'MIN001 — Stanton')
     await user.click(screen.getByText('+ Ajouter'))
     await screen.findByText('Lots à raffiner')
 

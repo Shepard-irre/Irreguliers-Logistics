@@ -30,6 +30,10 @@ class AddExpenseIn(BaseModel):
     amount_auec: float
 
 
+class RenameSessionIn(BaseModel):
+    numero: str
+
+
 def _clean_commodity_key(name: str) -> str:
     return name.lower().replace(" (ore)", "").replace(" (raw)", "").strip()
 
@@ -128,6 +132,25 @@ def create_session(
     uex=Depends(get_uex),
 ):
     return uex.create_mining_session(user["username"], body.star_system)
+
+
+@router.put("/{session_id}/rename")
+def rename_session(
+    session_id: int,
+    body: RenameSessionIn,
+    user: dict = Depends(require_permission("page_raffineries")),
+    uex=Depends(get_uex),
+):
+    session = uex.get_mining_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session introuvable")
+
+    is_admin = "admin_panel" in user.get("permissions", [])
+    if not is_admin and session.get("created_by") != user["username"]:
+        raise HTTPException(status_code=403, detail="Seul le responsable de la session peut la renommer")
+
+    uex.rename_mining_session(session_id, body.numero)
+    return {"ok": True}
 
 
 @router.post("/{session_id}/close")

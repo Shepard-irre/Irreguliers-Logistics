@@ -9,7 +9,9 @@ import {
   addSessionExpense,
   removeSessionExpense,
   getSessionFinancialSummary,
+  renameSession,
 } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
 
 const STATUS_LABELS = {
   open: 'En cours',
@@ -28,10 +30,25 @@ function fmtAuec(n) {
 }
 
 export default function SessionCard({ session, onChanged, members = [] }) {
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState(null)
   const [summary, setSummary] = useState(null)
   const [error, setError] = useState(null)
+  const [renaming, setRenaming] = useState(false)
+  const [newNumero, setNewNumero] = useState(session.numero)
+
+  const isResponsible = user && user.username === session.created_by
+
+  async function handleRename() {
+    if (!newNumero.trim() || newNumero === session.numero) {
+      setRenaming(false)
+      return
+    }
+    await renameSession(session.id, newNumero.trim())
+    setRenaming(false)
+    onChanged?.()
+  }
 
   const [shipName, setShipName] = useState('')
   const [shipRole, setShipRole] = useState('mining')
@@ -94,18 +111,52 @@ export default function SessionCard({ session, onChanged, members = [] }) {
 
   return (
     <div className="cut bg-irr-panel border border-irr-border flex flex-col">
-      <button
-        onClick={toggle}
-        className="flex items-center justify-between px-6 py-4 text-left"
+      <div
+        onClick={renaming ? undefined : toggle}
+        className="flex items-center justify-between px-6 py-4 text-left cursor-pointer"
       >
         <div className="flex items-center gap-3">
-          <span className="font-display font-bold text-base tracking-wide">{session.numero}</span>
+          {renaming ? (
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <input
+                value={newNumero}
+                onChange={(e) => setNewNumero(e.target.value)}
+                autoFocus
+                className="bg-irr-panel-alt border border-irr-border-strong px-2 py-1 text-sm text-irr-text focus:outline-none focus:border-irr-accent"
+              />
+              <button
+                onClick={handleRename}
+                className="cut-sm bg-irr-accent-dim border border-irr-accent text-irr-accent text-xs font-display font-semibold px-2 py-1"
+              >
+                OK
+              </button>
+              <button
+                onClick={() => { setNewNumero(session.numero); setRenaming(false) }}
+                className="text-irr-dim hover:text-irr-text text-xs"
+              >
+                Annuler
+              </button>
+            </div>
+          ) : (
+            <>
+              <span className="font-display font-bold text-base tracking-wide">{session.numero}</span>
+              {isResponsible && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setNewNumero(session.numero); setRenaming(true) }}
+                  className="text-irr-dim hover:text-irr-accent text-xs"
+                  title="Renommer la session"
+                >
+                  ✎
+                </button>
+              )}
+            </>
+          )}
           <span className="text-irr-dim text-sm">— {session.star_system}</span>
         </div>
         <span className={`cut-sm border text-[10px] font-display font-semibold tracking-[0.14em] uppercase px-2.5 py-1 ${STATUS_CLASSES[session.status] || ''}`}>
           {STATUS_LABELS[session.status] || session.status}
         </span>
-      </button>
+      </div>
 
       {open && (
         <div className="px-6 pb-6 flex flex-col gap-5 border-t border-irr-border pt-5">

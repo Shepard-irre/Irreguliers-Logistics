@@ -778,13 +778,23 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
     def create_mining_session(self, created_by, star_system):
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
-            c.execute("INSERT INTO mining_sessions (star_system, created_by) VALUES (?, ?)",
-                      (star_system, created_by))
+            today = datetime.now().strftime("%d/%m/%y")
+            c.execute(
+                "SELECT COUNT(*) FROM mining_sessions WHERE created_by=? "
+                "AND date(date_created, 'localtime') = date('now', 'localtime')",
+                (created_by,))
+            count_today = c.fetchone()[0]
+            numero = f"{created_by}-{today}-{count_today + 1}"
+            c.execute("INSERT INTO mining_sessions (numero, star_system, created_by) VALUES (?, ?, ?)",
+                      (numero, star_system, created_by))
             session_id = c.lastrowid
-            numero = f"MIN{session_id:03d}"
-            c.execute("UPDATE mining_sessions SET numero=? WHERE id=?", (numero, session_id))
             conn.commit()
         return {'id': session_id, 'numero': numero}
+
+    def rename_mining_session(self, session_id, numero):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE mining_sessions SET numero=? WHERE id=?", (numero, session_id))
+            conn.commit()
 
     def get_mining_sessions(self, status=None, participant=None):
         with sqlite3.connect(self.db_path) as conn:

@@ -117,6 +117,13 @@ export function getSessionDetail(sessionId) {
   return request(`/raffineries/sessions/${sessionId}`)
 }
 
+export function renameSession(sessionId, numero) {
+  return request(`/raffineries/sessions/${sessionId}/rename`, {
+    method: 'PUT',
+    body: JSON.stringify({ numero }),
+  })
+}
+
 export function closeSession(sessionId) {
   return request(`/raffineries/sessions/${sessionId}/close`, { method: 'POST' })
 }

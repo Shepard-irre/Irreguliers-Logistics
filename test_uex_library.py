@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime
 from unittest.mock import MagicMock
 
 from uex_library import UEXManager
@@ -54,6 +55,30 @@ def test_get_wp_members_returns_empty_list_without_wp_auth(monkeypatch):
     mgr = UEXManager()
 
     assert mgr.get_wp_members() == []
+
+
+def test_create_mining_session_numero_is_creator_date_and_daily_increment(tmp_path):
+    mgr = _fresh_manager(tmp_path)
+
+    first = mgr.create_mining_session("Shepard40", "Stanton")
+    second = mgr.create_mining_session("Shepard40", "Pyro")
+    other_creator = mgr.create_mining_session("Darkias", "Nyx")
+
+    today = datetime.now().strftime("%d/%m/%y")
+    assert first["numero"] == f"Shepard40-{today}-1"
+    assert second["numero"] == f"Shepard40-{today}-2"
+    assert other_creator["numero"] == f"Darkias-{today}-1"
+
+
+def test_rename_mining_session_updates_numero(tmp_path):
+    mgr = _fresh_manager(tmp_path)
+    session = mgr.create_mining_session("Shepard40", "Stanton")
+
+    mgr.rename_mining_session(session["id"], "Session du raid de mardi")
+
+    with sqlite3.connect(mgr.db_path) as conn:
+        row = conn.execute("SELECT numero FROM mining_sessions WHERE id=?", (session["id"],)).fetchone()
+    assert row[0] == "Session du raid de mardi"
 
 
 def test_headers_include_browser_user_agent():
