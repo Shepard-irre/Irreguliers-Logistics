@@ -193,6 +193,14 @@ class UEXManager:
                           description TEXT NOT NULL,
                           amount_auec REAL NOT NULL)''')
 
+            # --- Screenshots utilisés par session (détection de doublon) ---
+            c.execute('''CREATE TABLE IF NOT EXISTS session_screenshots
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          session_id INTEGER NOT NULL,
+                          filename TEXT NOT NULL,
+                          uploaded_by TEXT NOT NULL,
+                          date_uploaded DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
             # --- Stock personnel ---
             c.execute('''CREATE TABLE IF NOT EXISTS personal_stock
                          (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -795,6 +803,21 @@ Retourne UNIQUEMENT le JSON, sans texte autour."""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("UPDATE mining_sessions SET numero=? WHERE id=?", (numero, session_id))
             conn.commit()
+
+    def register_session_screenshot(self, session_id, filename, uploaded_by):
+        """Enregistre un screenshot utilisé pour une session. Retourne True si ce
+        nom de fichier avait déjà été utilisé dans cette même session (doublon)."""
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            c.execute(
+                "SELECT 1 FROM session_screenshots WHERE session_id=? AND filename=?",
+                (session_id, filename))
+            is_duplicate = c.fetchone() is not None
+            c.execute(
+                "INSERT INTO session_screenshots (session_id, filename, uploaded_by) VALUES (?, ?, ?)",
+                (session_id, filename, uploaded_by))
+            conn.commit()
+        return is_duplicate
 
     def get_mining_sessions(self, status=None, participant=None):
         with sqlite3.connect(self.db_path) as conn:

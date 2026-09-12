@@ -198,9 +198,10 @@ export function getAllTerminals() {
   return request('/raffineries/all-terminals')
 }
 
-export function analyzeScreenshot(file) {
+export function analyzeScreenshot(file, sessionId) {
   const formData = new FormData()
   formData.append('screenshot', file)
+  formData.append('session_id', sessionId)
   return request('/raffineries/analyze-screenshot', { method: 'POST', body: formData })
 }
 

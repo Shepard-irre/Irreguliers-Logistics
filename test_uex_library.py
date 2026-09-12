@@ -81,6 +81,20 @@ def test_rename_mining_session_updates_numero(tmp_path):
     assert row[0] == "Session du raid de mardi"
 
 
+def test_register_session_screenshot_flags_duplicate_filename_within_session(tmp_path):
+    mgr = _fresh_manager(tmp_path)
+    session = mgr.create_mining_session("Shepard40", "Stanton")
+    other_session = mgr.create_mining_session("Shepard40", "Pyro")
+
+    first = mgr.register_session_screenshot(session["id"], "raffinerie_01.png", "Shepard40")
+    second = mgr.register_session_screenshot(session["id"], "raffinerie_01.png", "Shepard40")
+    different_session = mgr.register_session_screenshot(other_session["id"], "raffinerie_01.png", "Shepard40")
+
+    assert first is False  # first time seeing this filename in this session — not a duplicate
+    assert second is True  # same filename, same session — duplicate
+    assert different_session is False  # same filename but a different session — not a duplicate
+
+
 def test_headers_include_browser_user_agent():
     mgr = UEXManager()
     assert "User-Agent" in mgr.headers

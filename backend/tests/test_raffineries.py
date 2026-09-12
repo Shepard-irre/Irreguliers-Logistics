@@ -377,14 +377,34 @@ def test_analyze_screenshot_passes_image_bytes_and_returns_result(fake_uex, clie
         "screen_type": "B",
         "lines": [{"commodity_name": "Quantainium", "quality": 700}],
     }
+    fake_uex.register_session_screenshot.return_value = False
     client = client_as(MINEUR_USER)
     image_bytes = b"\x89PNG\r\n\x1a\nfake-png-bytes"
 
     resp = client.post(
         "/raffineries/analyze-screenshot",
+        data={"session_id": "4"},
         files={"screenshot": ("shot.png", image_bytes, "image/png")},
     )
 
     assert resp.status_code == 200
     fake_uex.analyze_refinery_screenshot.assert_called_once_with(image_bytes)
-    assert resp.json()["screen_type"] == "B"
+    fake_uex.register_session_screenshot.assert_called_once_with(4, "shot.png", "Shepard40")
+    body = resp.json()
+    assert body["screen_type"] == "B"
+    assert body["duplicate_screenshot"] is False
+
+
+def test_analyze_screenshot_flags_duplicate_filename_in_same_session(fake_uex, client_as):
+    fake_uex.analyze_refinery_screenshot.return_value = {"screen_type": "B", "lines": []}
+    fake_uex.register_session_screenshot.return_value = True
+    client = client_as(MINEUR_USER)
+
+    resp = client.post(
+        "/raffineries/analyze-screenshot",
+        data={"session_id": "4"},
+        files={"screenshot": ("shot.png", b"fake", "image/png")},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["duplicate_screenshot"] is True

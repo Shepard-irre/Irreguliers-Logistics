@@ -55,8 +55,10 @@ export default function NewJobForm({ onCreated, onClose }) {
   const [error, setError] = useState(null)
 
   const [screenshotFile, setScreenshotFile] = useState(null)
+  const [screenshotInputKey, setScreenshotInputKey] = useState(0)
   const [visionBusy, setVisionBusy] = useState(false)
   const [visionOrders, setVisionOrders] = useState(null)
+  const [screenshotWarning, setScreenshotWarning] = useState(null)
   const [selectedOrderIdx, setSelectedOrderIdx] = useState(0)
 
   useEffect(() => {
@@ -232,12 +234,24 @@ export default function NewJobForm({ onCreated, onClose }) {
     }
     setVisionBusy(true)
     setError(null)
+    setScreenshotWarning(null)
     try {
-      const result = await analyzeScreenshot(screenshotFile)
+      const result = await analyzeScreenshot(screenshotFile, sessionId)
       if (result.error) {
         setError(result.error)
         return
       }
+
+      if (result.duplicate_screenshot) {
+        setScreenshotWarning(
+          `Tu as déjà utilisé "${screenshotFile.name}" durant cette session — les lots seront quand même importés, vérifie qu'il ne s'agit pas d'un doublon.`
+        )
+      }
+
+      // Clear the file input so re-selecting the exact same file (common when testing
+      // or re-importing on purpose) fires a fresh change event next time.
+      setScreenshotFile(null)
+      setScreenshotInputKey((k) => k + 1)
 
       if (result.terminal_name) autoSelectTerminal(result.terminal_name)
       if (result.method) autoSelectMethod(result.method)
@@ -455,6 +469,7 @@ export default function NewJobForm({ onCreated, onClose }) {
           <label className="flex-1">
             <span className="sr-only">Screenshot raffinerie</span>
             <input
+              key={screenshotInputKey}
               type="file"
               accept="image/png,image/jpeg,image/jpg"
               aria-label="Screenshot raffinerie"
@@ -662,6 +677,7 @@ export default function NewJobForm({ onCreated, onClose }) {
         </div>
       )}
 
+      {screenshotWarning && <div className="text-amber-400 text-xs">{screenshotWarning}</div>}
       {error && <div className="text-red-400 text-xs">{error}</div>}
     </div>
   )

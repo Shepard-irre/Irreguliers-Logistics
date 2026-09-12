@@ -4,7 +4,7 @@ from typing import Literal, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from auth import require_permission
@@ -255,8 +255,13 @@ def all_terminals(
 @router.post("/analyze-screenshot")
 async def analyze_screenshot(
     screenshot: UploadFile,
+    session_id: int = Form(...),
     user: dict = Depends(require_permission("page_raffineries")),
     uex=Depends(get_uex),
 ):
     image_bytes = await screenshot.read()
-    return uex.analyze_refinery_screenshot(image_bytes)
+    result = uex.analyze_refinery_screenshot(image_bytes)
+    result["duplicate_screenshot"] = uex.register_session_screenshot(
+        session_id, screenshot.filename, user["username"]
+    )
+    return result

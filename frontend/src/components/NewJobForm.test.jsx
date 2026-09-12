@@ -120,7 +120,7 @@ describe('NewJobForm — mode batch', () => {
     await user.upload(fileInput, file)
     await user.click(screen.getByText('Analyser le screenshot'))
 
-    expect(analyzeScreenshot).toHaveBeenCalledWith(file)
+    expect(analyzeScreenshot).toHaveBeenCalledWith(file, '1')
     // Only the active line (Quantainium) is imported; the inactive one (Agricium) is skipped.
     expect(await screen.findByText('Lots à raffiner')).toBeInTheDocument()
     expect(screen.getAllByText('Quantainium (Raw)')).toHaveLength(2)
@@ -153,5 +153,30 @@ describe('NewJobForm — mode batch', () => {
     await waitFor(() => expect(createRaffineriesJob).toHaveBeenCalled())
     expect(createRaffineriesJob.mock.calls[0][0].terminal_name).toContain('Ashland Sallow')
     expect(screen.queryByText(/Cannot read properties of undefined/)).not.toBeInTheDocument()
+  })
+
+  it('avertit quand le screenshot a déjà été utilisé dans cette session, sans bloquer l\'import', async () => {
+    getRaffineriesReferenceData.mockResolvedValue(REF_DATA)
+    analyzeScreenshot.mockResolvedValue({
+      screen_type: 'B',
+      duplicate_screenshot: true,
+      lines: [{ name: 'Quantainium', quality: 700, quantity_raw: 2000, quantity_refined: 1600, active: true }],
+    })
+    const user = userEvent.setup()
+
+    render(<NewJobForm onCreated={() => {}} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText('+ Ajouter')).toBeInTheDocument())
+    await selectSession(user)
+
+    const file = new File(['fake-bytes'], 'shot.png', { type: 'image/png' })
+    const fileInput = screen.getByLabelText('Screenshot raffinerie')
+    await user.upload(fileInput, file)
+    await user.click(screen.getByText('Analyser le screenshot'))
+
+    expect(await screen.findByText(/déjà utilisé "shot.png" durant cette session/)).toBeInTheDocument()
+    // The line was still imported despite the duplicate warning.
+    expect(await screen.findByText('Lots à raffiner')).toBeInTheDocument()
+    // The file input is cleared after analysis, ready for a fresh (or re-selected) screenshot.
+    expect(screen.getByText('Analyser le screenshot')).toBeDisabled()
   })
 })
