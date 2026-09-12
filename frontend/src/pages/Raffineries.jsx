@@ -12,6 +12,7 @@ const TABS = [
   { key: 'sessions', label: 'Sessions de minage' },
   { key: 'estimation', label: 'Nouvelle estimation' },
   { key: 'jobs', label: 'Jobs en attente' },
+  { key: 'stock', label: 'Stock personnel' },
 ]
 
 export default function Raffineries() {
@@ -88,10 +89,10 @@ export default function Raffineries() {
                 <JobCard key={job.id} job={job} onConfirm={handleConfirm} onCancel={handleCancel} />
               ))}
             </div>
-
-            <PersonalStock />
           </>
         )}
+
+        {activeTab === 'stock' && <PersonalStock />}
 
         <CommodityLots />
       </div>

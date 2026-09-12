@@ -276,7 +276,8 @@ if selected_page == "🏗️ Raffineries":
         for t in _all_terminals if t.get('name')
     ))
 
-    tab_sessions, tab_estim, tab_confirm = st.tabs(["📋 Sessions de minage", "🔬 Nouvelle estimation", "⏳ Jobs en attente"])
+    tab_sessions, tab_estim, tab_confirm, tab_stock = st.tabs(
+        ["📋 Sessions de minage", "🔬 Nouvelle estimation", "⏳ Jobs en attente", "👤 Stock personnel"])
 
     # --- ONGLET SESSIONS DE MINAGE ---
     with tab_sessions:
@@ -1085,8 +1086,7 @@ if selected_page == "🏗️ Raffineries":
                             st.toast("Job annulé.")
                             st.rerun()
 
-        # --- Stock personnel du mineur connecté ---
-        st.divider()
+    with tab_stock:
         st.subheader("👤 Mon stock personnel")
         personal_df = uex.get_personal_stock(user['username'])
         if personal_df.empty:
