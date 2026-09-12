@@ -271,7 +271,7 @@ def test_financial_summary_vente_settlement_not_charged_ship_maintenance(fake_ue
         ],
     }
     assert body["personnel_settlement"] is None
-    assert body["federal_settlement"] is None
+    assert "federal_settlement" not in body
     assert body["recap_global"] == {
         "recette_globale": 5000,
         "participation_federation": 1000,
@@ -282,7 +282,10 @@ def test_financial_summary_vente_settlement_not_charged_ship_maintenance(fake_ue
     }
 
 
-def test_financial_summary_recap_global_sums_all_three_settlements(fake_uex, client):
+def test_financial_summary_recap_global_sums_vente_and_personnel_only(fake_uex, client):
+    # Management decision: stock_federal no longer produces a settlement (the federation
+    # doesn't pay anyone), so its orders must not feed into recap_global either — only
+    # vente and personnel remain payers.
     fake_uex.get_session_financial_summary.return_value = {
         "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
         "crew": ["Shepard40", "Darkias"],
@@ -301,13 +304,14 @@ def test_financial_summary_recap_global_sums_all_three_settlements(fake_uex, cli
 
     assert resp.status_code == 200
     body = resp.json()
+    assert "federal_settlement" not in body
     assert body["recap_global"] == {
-        "recette_globale": 15000,
-        "participation_federation": 3000,
-        "part_transporteurs": 2250,
+        "recette_globale": 10000,
+        "participation_federation": 2000,
+        "part_transporteurs": 1500,
         "cout_entretien": 0,
-        "cout_total_membres": 9750,
-        "salaire_global_membre": 4875,
+        "cout_total_membres": 6500,
+        "salaire_global_membre": 3250,
     }
 
 
@@ -342,11 +346,13 @@ def test_financial_summary_computes_personnel_settlement(fake_uex, client):
             {"commodity_name": "Quantainium", "quantity": 100, "price_per_scu": 50, "estimated_revenue": 5000}
         ],
     }
-    assert body["federal_settlement"] is None
+    assert "federal_settlement" not in body
     assert body["has_orders"] is True
 
 
-def test_financial_summary_computes_federal_settlement_without_transport_cost(fake_uex, client):
+def test_financial_summary_has_no_report_when_only_stock_federal_orders_exist(fake_uex, client):
+    # Since stock_federal no longer produces a settlement, a session with ONLY that
+    # destination has nothing left to report.
     fake_uex.get_session_financial_summary.return_value = {
         "session": {"id": 4, "star_system": "Stanton", "created_by": "Shepard40"},
         "crew": ["Shepard40", "Darkias"],
@@ -365,19 +371,10 @@ def test_financial_summary_computes_federal_settlement_without_transport_cost(fa
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["federal_settlement"] == {
-        "payer": "Fédération",
-        "recette": 5000,
-        "part_federation": 1000,
-        "part_transport": 0,
-        "expenses": 0,
-        "reste": 4000,
-        "salaire_par_joueur": 2000,
-        "lines": [
-            {"commodity_name": "Quantainium", "quantity": 100, "price_per_scu": 50, "estimated_revenue": 5000}
-        ],
-    }
+    assert body["has_orders"] is False
     assert body["personnel_settlement"] is None
+    assert body["vente_settlement"] is None
+    assert "federal_settlement" not in body
 
 
 def test_financial_summary_404_when_session_missing(fake_uex, client):

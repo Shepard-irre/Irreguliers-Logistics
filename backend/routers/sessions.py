@@ -237,6 +237,9 @@ def financial_summary(
     nb = summary["nb_joueurs"]
     transport_participates = bool(summary.get("transport_crew"))
 
+    # Décision management : la fédération ne "doit" plus rien à personne (ni aux
+    # membres, ni aux transporteurs) — stock_federal ne produit donc plus de
+    # règlement. Elle garde sa part de 20% sur les deux règlements restants.
     vente_settlement = _settlement(
         summary["orders_vente"], "Transporteurs",
         nb, transport_participates, comm_name_map, system_name, uex,
@@ -245,12 +248,8 @@ def financial_summary(
         summary.get("orders_personnel", []), summary["session"].get("created_by"),
         nb, transport_participates, comm_name_map, system_name, uex,
     )
-    federal_settlement = _settlement(
-        summary["orders_stock_fed"], "Fédération",
-        nb, transport_participates, comm_name_map, system_name, uex,
-    )
 
-    settlements = [s for s in (vente_settlement, personnel_settlement, federal_settlement) if s]
+    settlements = [s for s in (vente_settlement, personnel_settlement) if s]
     # Les frais de session (carburant, réparations) sont avancés par le créateur de la
     # session — ils doivent être remboursés sur la recette globale avant le partage entre
     # membres, pas déduits d'un règlement individuel (sinon il les paierait deux fois).
@@ -268,9 +267,8 @@ def financial_summary(
         "total_expenses": total_exp,
         "nb_joueurs": nb,
         "crew": summary["crew"],
-        "has_orders": bool(summary["orders_vente"] or summary["orders_stock_fed"] or summary.get("orders_personnel")),
+        "has_orders": bool(summary["orders_vente"] or summary.get("orders_personnel")),
         "vente_settlement": vente_settlement,
         "personnel_settlement": personnel_settlement,
-        "federal_settlement": federal_settlement,
         "recap_global": recap_global,
     }

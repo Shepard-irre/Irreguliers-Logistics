@@ -432,7 +432,7 @@ if selected_page == "🏗️ Raffineries":
                     if user['username'] in FINANCIAL_SUMMARY_ALLOWED_USERS:
                         st.markdown("**📊 Rapport financier**")
                         summary = uex.get_session_financial_summary(sess_id)
-                        if not summary['orders_vente'] and not summary['orders_stock_fed'] and not summary['orders_personnel']:
+                        if not summary['orders_vente'] and not summary['orders_personnel']:
                             st.caption("Aucun bon de transport rattaché à cette session.")
                         else:
                             # Map nom nettoyé -> id du minerai RAFFINÉ (priorité aux entrées sans suffixe)
@@ -468,11 +468,9 @@ if selected_page == "🏗️ Raffineries":
                                 summary.get('orders_personnel', []), summary['session'].get('created_by'),
                                 nb, transport_participates, comm_name_map, system_name,
                             )
-                            federal_settlement = compute_settlement(
-                                summary['orders_stock_fed'], "Fédération",
-                                nb, transport_participates, comm_name_map, system_name,
-                            )
-                            settlements = [s for s in (vente_settlement, personnel_settlement, federal_settlement) if s]
+                            # Décision management : la fédération ne "doit" plus rien à
+                            # personne — stock_federal ne produit plus de règlement.
+                            settlements = [s for s in (vente_settlement, personnel_settlement) if s]
                             st.markdown("**📋 Récapitulatif global**")
                             g1, g2, g3 = st.columns(3)
                             g1.metric("Recette globale estimée", f"{sum(s['recette'] for s in settlements):,.0f} aUEC")
@@ -488,7 +486,6 @@ if selected_page == "🏗️ Raffineries":
                             g6.metric("Salaire global d'un membre", f"{salaire_global_membre:,.0f} aUEC")
 
                             render_settlement_block("💰 Règlement stock personnel", personnel_settlement, kind='personnel')
-                            render_settlement_block("🏛️ Règlement stock fédération", federal_settlement, kind='federal')
                             render_settlement_block("🚀 Règlement vente", vente_settlement, kind='vente')
 
     # --- ONGLET ESTIMATION ---

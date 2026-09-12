@@ -279,7 +279,6 @@ export default function SessionCard({ session, onChanged, members = [] }) {
                         <FinTile label="Salaire global d'un membre" value={fmtAuec(summary.recap_global.salaire_global_membre)} accent />
                       </div>
                       <SettlementBlock title="Règlement stock personnel" settlement={summary.personnel_settlement} kind="personnel" />
-                      <SettlementBlock title="Règlement stock fédération" settlement={summary.federal_settlement} kind="federal" />
                       <SettlementBlock title="Règlement vente" settlement={summary.vente_settlement} kind="vente" />
                     </>
                   )}
@@ -295,7 +294,6 @@ export default function SessionCard({ session, onChanged, members = [] }) {
 
 function SettlementBlock({ title, settlement, kind }) {
   if (!settlement) return null
-  const owesFederation = kind !== 'federal'
   const owesTransport = kind !== 'vente' && settlement.part_transport > 0
   const keepsTransport = kind === 'vente' && settlement.part_transport > 0
 
@@ -309,9 +307,7 @@ function SettlementBlock({ title, settlement, kind }) {
         <span className="font-mono font-semibold">{fmtAuec(settlement.recette)}</span>
       </div>
       <div className="grid grid-cols-3 gap-3 text-sm">
-        {owesFederation && (
-          <FinTile label={`${settlement.payer} doit à la Fédération`} value={fmtAuec(settlement.part_federation)} />
-        )}
+        <FinTile label={`${settlement.payer} doit à la Fédération`} value={fmtAuec(settlement.part_federation)} />
         {owesTransport && (
           <FinTile label={`${settlement.payer} doit aux Transporteurs`} value={fmtAuec(settlement.part_transport)} />
         )}
